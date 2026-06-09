@@ -1,5 +1,9 @@
+use std::collections::VecDeque;
+
 use ratatui::widgets::TableState;
-use sysinfo::System;
+use sysinfo::{Pid, Signal, System};
+
+pub const HISTORY_LEN: usize = 120;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum SortKey {
@@ -7,6 +11,13 @@ pub enum SortKey {
     Memory,
     Pid,
     Name,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum InputMode {
+    Normal,
+    Filter,
+    ConfirmKill,
 }
 
 pub struct ProcRow {
@@ -19,12 +30,19 @@ pub struct ProcRow {
 pub struct App {
     sys: System,
     pub processes: Vec<ProcRow>,
+    pub visible: Vec<usize>,
     pub table_state: TableState,
     pub sort_key: SortKey,
+    pub input_mode: InputMode,
+    pub filter: String,
     pub cpu_usage: f32,
     pub per_core: Vec<f32>,
     pub mem_used: u64,
     pub mem_total: u64,
+    pub cpu_history: VecDeque<u64>,
+    pub mem_history: VecDeque<u64>,
+    pub paused: bool,
+    pub status: Option<String>,
 }
 
 impl App {
@@ -32,12 +50,19 @@ impl App {
         let mut app = App {
             sys: System::new_all(),
             processes: Vec::new(),
+            visible: Vec::new(),
             table_state: TableState::default().with_selected(0),
             sort_key: SortKey::Cpu,
+            input_mode: InputMode::Normal,
+            filter: String::new(),
             cpu_usage: 0.0,
             per_core: Vec::new(),
             mem_used: 0,
             mem_total: 0,
+            cpu_history: VecDeque::with_capacity(HISTORY_LEN),
+            mem_history: VecDeque::with_capacity(HISTORY_LEN),
+            paused: false,
+            status: None,
         };
         app.refresh();
         app
@@ -50,6 +75,14 @@ impl App {
         self.per_core = self.sys.cpus().iter().map(|c| c.cpu_usage()).collect();
         self.mem_used = self.sys.used_memory();
         self.mem_total = self.sys.total_memory();
+
+        push_history(&mut self.cpu_history, self.cpu_usage as u64);
+        let mem_pct = if self.mem_total > 0 {
+            (self.mem_used * 100 / self.mem_total) as u64
+        } else {
+            0
+        };
+        push_history(&mut self.mem_history, mem_pct);
 
         self.processes = self
             .sys
@@ -64,12 +97,60 @@ impl App {
             .collect();
 
         self.sort();
-        self.clamp_selection();
+        self.apply_filter();
     }
 
     pub fn sort_by(&mut self, key: SortKey) {
         self.sort_key = key;
         self.sort();
+        self.apply_filter();
+    }
+
+    pub fn apply_filter(&mut self) {
+        let needle = self.filter.to_lowercase();
+        self.visible = self
+            .processes
+            .iter()
+            .enumerate()
+            .filter(|(_, p)| {
+                needle.is_empty()
+                    || p.name.to_lowercase().contains(&needle)
+                    || p.pid.to_string().contains(&needle)
+            })
+            .map(|(i, _)| i)
+            .collect();
+        self.clamp_selection();
+    }
+
+    pub fn selected_proc(&self) -> Option<&ProcRow> {
+        self.table_state
+            .selected()
+            .and_then(|i| self.visible.get(i))
+            .and_then(|&idx| self.processes.get(idx))
+    }
+
+    pub fn kill_selected(&mut self) {
+        let target = self.selected_proc().map(|p| (p.pid, p.name.clone()));
+        if let Some((pid, name)) = target {
+            let result = self
+                .sys
+                .process(Pid::from_u32(pid))
+                .map(|p| p.kill_with(Signal::Term).unwrap_or_else(|| p.kill()));
+            self.status = Some(match result {
+                Some(true) => format!("Sent SIGTERM to {name} ({pid})"),
+                Some(false) => format!("Failed to signal {name} ({pid}) — permission denied?"),
+                None => format!("Process {pid} no longer exists"),
+            });
+        }
+    }
+
+    pub fn toggle_pause(&mut self) {
+        self.paused = !self.paused;
+        self.status = if self.paused {
+            Some("Paused — press space to resume".to_string())
+        } else {
+            None
+        };
     }
 
     fn sort(&mut self) {
@@ -86,28 +167,28 @@ impl App {
     }
 
     fn clamp_selection(&mut self) {
-        if self.processes.is_empty() {
+        if self.visible.is_empty() {
             self.table_state.select(None);
         } else {
             let selected = self.table_state.selected().unwrap_or(0);
             self.table_state
-                .select(Some(selected.min(self.processes.len() - 1)));
+                .select(Some(selected.min(self.visible.len() - 1)));
         }
     }
 
     pub fn next(&mut self) {
-        if self.processes.is_empty() {
+        if self.visible.is_empty() {
             return;
         }
         let i = match self.table_state.selected() {
-            Some(i) => (i + 1).min(self.processes.len() - 1),
+            Some(i) => (i + 1).min(self.visible.len() - 1),
             None => 0,
         };
         self.table_state.select(Some(i));
     }
 
     pub fn previous(&mut self) {
-        if self.processes.is_empty() {
+        if self.visible.is_empty() {
             return;
         }
         let i = match self.table_state.selected() {
@@ -116,4 +197,11 @@ impl App {
         };
         self.table_state.select(Some(i));
     }
+}
+
+fn push_history(history: &mut VecDeque<u64>, value: u64) {
+    if history.len() >= HISTORY_LEN {
+        history.pop_front();
+    }
+    history.push_back(value);
 }

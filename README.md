@@ -6,7 +6,7 @@ Existing monitors each show a slice: `htop`/`btop` show processes, `docker stats
 
 ## Status
 
-**v0.1 — process monitoring** (working): live process table, CPU and memory gauges, sorting, keyboard navigation.
+**v0.2 — interactive process monitoring** (working): live process table, search/filter, kill processes, CPU/memory gauges with history sparklines, per-core bars, sorting, pause.
 
 ## Install / Run
 
@@ -16,14 +16,17 @@ cargo run --release
 
 ## Keybindings
 
-| Key | Action |
-|-----|--------|
-| `q` / `Esc` | Quit |
-| `↑`/`↓` or `j`/`k` | Navigate process list |
-| `c` | Sort by CPU |
-| `m` | Sort by memory |
-| `p` | Sort by PID |
-| `n` | Sort by name |
+| Key                | Action                                               |
+| ------------------ | ---------------------------------------------------- |
+| `q` / `Esc`        | Quit                                                 |
+| `↑`/`↓` or `j`/`k` | Navigate process list                                |
+| `/`                | Filter by name or PID (Enter to apply, Esc to clear) |
+| `x`                | Kill selected process (with confirmation)            |
+| `space`            | Pause/resume refresh                                 |
+| `c`                | Sort by CPU                                          |
+| `m`                | Sort by memory                                       |
+| `p`                | Sort by PID                                          |
+| `n`                | Sort by name                                         |
 
 ## Roadmap
 
@@ -31,10 +34,13 @@ cargo run --release
   - Live process table (PID, name, CPU%, memory)
   - Global CPU + memory gauges
   - Sorting and keyboard navigation
-- **v0.2 — Polish & depth**
+- **v0.2 — Interactivity** ✅
   - Process search/filter (`/`)
-  - Per-core CPU bars, historical sparklines
-  - Process tree view, kill/signal support
+  - Kill processes with confirmation (`x`)
+  - Per-core CPU bars, CPU/memory history sparklines
+  - Pause/resume (`space`)
+- **v0.25 — Polish**
+  - Process tree view
   - Config file (refresh rate, theme)
 - **v0.3 — Containers**
   - Docker/Podman socket integration

@@ -1,16 +1,16 @@
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style, Stylize};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Borders, Gauge, Paragraph, Row, Table};
+use ratatui::widgets::{Block, Borders, Gauge, Paragraph, Row, Sparkline, Table};
 use ratatui::Frame;
 
-use crate::app::{App, SortKey};
+use crate::app::{App, InputMode, SortKey};
 
 pub fn draw(frame: &mut Frame, app: &mut App) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(4),
+            Constraint::Length(6),
             Constraint::Min(5),
             Constraint::Length(1),
         ])
@@ -18,7 +18,7 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
 
     draw_header(frame, app, chunks[0]);
     draw_process_table(frame, app, chunks[1]);
-    draw_footer(frame, chunks[2]);
+    draw_footer(frame, app, chunks[2]);
 }
 
 fn draw_header(frame: &mut Frame, app: &App, area: Rect) {
@@ -27,16 +27,44 @@ fn draw_header(frame: &mut Frame, app: &App, area: Rect) {
         .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
         .split(area);
 
+    let cpu_block = Block::default()
+        .borders(Borders::ALL)
+        .title(format!(" CPU ({} cores) ", app.per_core.len()));
+    let cpu_inner = cpu_block.inner(halves[0]);
+    frame.render_widget(cpu_block, halves[0]);
+
+    let cpu_rows = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(1),
+            Constraint::Length(1),
+            Constraint::Length(2),
+        ])
+        .split(cpu_inner);
+
     let cpu_gauge = Gauge::default()
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title(format!(" CPU ({} cores) ", app.per_core.len())),
-        )
         .gauge_style(Style::default().fg(gauge_color(app.cpu_usage)))
         .ratio((app.cpu_usage as f64 / 100.0).clamp(0.0, 1.0))
         .label(format!("{:.1}%", app.cpu_usage));
-    frame.render_widget(cpu_gauge, halves[0]);
+    frame.render_widget(cpu_gauge, cpu_rows[0]);
+
+    frame.render_widget(per_core_line(&app.per_core), cpu_rows[1]);
+
+    let cpu_data: Vec<u64> = app.cpu_history.iter().copied().collect();
+    let cpu_spark = Sparkline::default()
+        .data(&cpu_data)
+        .max(100)
+        .style(Style::default().fg(Color::Cyan));
+    frame.render_widget(cpu_spark, cpu_rows[2]);
+
+    let mem_block = Block::default().borders(Borders::ALL).title(" Memory ");
+    let mem_inner = mem_block.inner(halves[1]);
+    frame.render_widget(mem_block, halves[1]);
+
+    let mem_rows = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Length(1), Constraint::Length(3)])
+        .split(mem_inner);
 
     let mem_pct = if app.mem_total > 0 {
         app.mem_used as f64 / app.mem_total as f64
@@ -44,7 +72,6 @@ fn draw_header(frame: &mut Frame, app: &App, area: Rect) {
         0.0
     };
     let mem_gauge = Gauge::default()
-        .block(Block::default().borders(Borders::ALL).title(" Memory "))
         .gauge_style(Style::default().fg(gauge_color((mem_pct * 100.0) as f32)))
         .ratio(mem_pct.clamp(0.0, 1.0))
         .label(format!(
@@ -52,7 +79,29 @@ fn draw_header(frame: &mut Frame, app: &App, area: Rect) {
             format_bytes(app.mem_used),
             format_bytes(app.mem_total)
         ));
-    frame.render_widget(mem_gauge, halves[1]);
+    frame.render_widget(mem_gauge, mem_rows[0]);
+
+    let mem_data: Vec<u64> = app.mem_history.iter().copied().collect();
+    let mem_spark = Sparkline::default()
+        .data(&mem_data)
+        .max(100)
+        .style(Style::default().fg(Color::Magenta));
+    frame.render_widget(mem_spark, mem_rows[1]);
+}
+
+fn per_core_line(per_core: &[f32]) -> Paragraph<'static> {
+    const LEVELS: [char; 8] = ['▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'];
+    let spans: Vec<Span> = per_core
+        .iter()
+        .map(|&usage| {
+            let idx = ((usage / 100.0 * 7.0).round() as usize).min(7);
+            Span::styled(
+                LEVELS[idx].to_string(),
+                Style::default().fg(gauge_color(usage)),
+            )
+        })
+        .collect();
+    Paragraph::new(Line::from(spans))
 }
 
 fn draw_process_table(frame: &mut Frame, app: &mut App, area: Rect) {
@@ -77,8 +126,9 @@ fn draw_process_table(frame: &mut Frame, app: &mut App, area: Rect) {
     .bottom_margin(1);
 
     let rows: Vec<Row> = app
-        .processes
+        .visible
         .iter()
+        .filter_map(|&idx| app.processes.get(idx))
         .map(|p| {
             Row::new(vec![
                 p.pid.to_string(),
@@ -102,29 +152,63 @@ fn draw_process_table(frame: &mut Frame, app: &mut App, area: Rect) {
     .block(
         Block::default()
             .borders(Borders::ALL)
-            .title(format!(" Processes ({}) ", app.processes.len())),
+            .title(if app.filter.is_empty() {
+                format!(" Processes ({}) ", app.processes.len())
+            } else {
+                format!(
+                    " Processes ({}/{}) — filter: {} ",
+                    app.visible.len(),
+                    app.processes.len(),
+                    app.filter
+                )
+            }),
     )
     .row_highlight_style(Style::default().bg(Color::DarkGray).add_modifier(Modifier::BOLD));
 
     frame.render_stateful_widget(table, area, &mut app.table_state);
 }
 
-fn draw_footer(frame: &mut Frame, area: Rect) {
-    let help = Paragraph::new(Line::from(vec![
-        " q ".bold().cyan(),
-        "quit  ".into(),
-        "↑/↓ j/k ".bold().cyan(),
-        "navigate  ".into(),
-        "c ".bold().cyan(),
-        "sort cpu  ".into(),
-        "m ".bold().cyan(),
-        "sort mem  ".into(),
-        "p ".bold().cyan(),
-        "sort pid  ".into(),
-        "n ".bold().cyan(),
-        "sort name".into(),
-    ]));
-    frame.render_widget(help, area);
+fn draw_footer(frame: &mut Frame, app: &App, area: Rect) {
+    let line = match app.input_mode {
+        InputMode::Filter => Line::from(vec![
+            " /".bold().cyan(),
+            app.filter.clone().into(),
+            "█".into(),
+            "  (Enter to apply, Esc to clear)".dark_gray(),
+        ]),
+        InputMode::ConfirmKill => {
+            let target = app
+                .selected_proc()
+                .map(|p| format!("{} ({})", p.name, p.pid))
+                .unwrap_or_else(|| "?".to_string());
+            Line::from(vec![
+                format!(" Kill {target}? ").bold().red(),
+                "y".bold().cyan(),
+                " to confirm, any other key to cancel".into(),
+            ])
+        }
+        InputMode::Normal => {
+            if let Some(status) = &app.status {
+                Line::from(vec![" ".into(), status.clone().yellow()])
+            } else {
+                Line::from(vec![
+                    " q ".bold().cyan(),
+                    "quit  ".into(),
+                    "↑/↓ ".bold().cyan(),
+                    "navigate  ".into(),
+                    "/ ".bold().cyan(),
+                    "filter  ".into(),
+                    "x ".bold().cyan(),
+                    "kill  ".into(),
+                    "space ".bold().cyan(),
+                    "pause  ".into(),
+                    "c/m/p/n ".bold().cyan(),
+                    "sort".into(),
+                ])
+            }
+        }
+    };
+    frame.render_widget(Paragraph::new(line), area);
 }
 
 fn gauge_color(pct: f32) -> Color {
