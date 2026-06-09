@@ -6,7 +6,7 @@ Existing monitors each show a slice: `htop`/`btop` show processes, `docker stats
 
 ## Status
 
-**v0.2 — interactive process monitoring** (working): live process table, search/filter, kill processes, CPU/memory gauges with history sparklines, per-core bars, sorting, pause.
+**v0.25 — interactive process monitoring** (working): live process table, search/filter, kill (SIGTERM/SIGKILL), process tree view, CPU/memory gauges with history sparklines, per-core bars, sorting, pause, config file.
 
 ## Install / Run
 
@@ -23,6 +23,7 @@ cargo run --release
 | `/`                | Filter by name or PID (Enter to apply, Esc to clear) |
 | `x`                | Kill selected process with SIGTERM (confirmation)    |
 | `X`                | Force-kill with SIGKILL (confirmation)               |
+| `t`                | Toggle process tree view                             |
 | `space`            | Pause/resume refresh                                 |
 | `c`                | Sort by CPU                                          |
 | `m`                | Sort by memory                                       |
@@ -40,9 +41,9 @@ cargo run --release
   - Kill processes with confirmation (`x`)
   - Per-core CPU bars, CPU/memory history sparklines
   - Pause/resume (`space`)
-- **v0.25 — Polish**
-  - Process tree view
-  - Config file (refresh rate, theme)
+- **v0.25 — Polish** ✅
+  - Process tree view (`t`)
+  - Config file (refresh rate, accent color)
 - **v0.3 — Containers**
   - Docker/Podman socket integration
   - Container CPU/mem vs. limits, restart counts
@@ -56,13 +57,26 @@ cargo run --release
   - Homebrew tap, prebuilt binaries, AUR package
   - Benchmarks: omnitop's own overhead vs. htop/btop
 
+## Configuration
+
+Optional config at `~/.config/omnitop/config.toml` (or `$XDG_CONFIG_HOME/omnitop/config.toml`):
+
+```toml
+# Refresh interval in milliseconds (minimum 100)
+refresh_ms = 1000
+
+# Accent color: a named color (cyan, green, magenta, ...) or hex like "#7aa2f7"
+accent = "cyan"
+```
+
 ## Architecture
 
 ```
 src/
-  main.rs   — event loop (input + 1s refresh tick)
-  app.rs    — application state, sampling via sysinfo, sorting
-  ui.rs     — ratatui rendering (header gauges, process table, footer)
+  main.rs    — event loop (input + config-driven refresh tick)
+  app.rs     — application state, sampling via sysinfo, sorting, tree ordering
+  ui.rs      — ratatui rendering (header gauges, process table, footer)
+  config.rs  — TOML config loading (refresh rate, accent color)
 ```
 
 The `sysinfo` crate is the initial sampling backend; the plan is to replace hot paths with direct `/proc` (Linux) and `libproc` (macOS) readers as profiling demands.

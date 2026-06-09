@@ -54,7 +54,7 @@ fn draw_header(frame: &mut Frame, app: &App, area: Rect) {
     let cpu_spark = Sparkline::default()
         .data(&cpu_data)
         .max(100)
-        .style(Style::default().fg(Color::Cyan));
+        .style(Style::default().fg(app.accent));
     frame.render_widget(cpu_spark, cpu_rows[2]);
 
     let mem_block = Block::default().borders(Borders::ALL).title(" Memory ");
@@ -105,11 +105,12 @@ fn per_core_line(per_core: &[f32]) -> Paragraph<'static> {
 }
 
 fn draw_process_table(frame: &mut Frame, app: &mut App, area: Rect) {
+    let accent = app.accent;
     let sort_label = |key: SortKey, label: &str| -> Span {
         if app.sort_key == key {
             Span::styled(
                 format!("{label} ▼"),
-                Style::default().add_modifier(Modifier::BOLD).fg(Color::Cyan),
+                Style::default().add_modifier(Modifier::BOLD).fg(accent),
             )
         } else {
             Span::raw(label.to_string())
@@ -125,14 +126,26 @@ fn draw_process_table(frame: &mut Frame, app: &mut App, area: Rect) {
     .style(Style::default().add_modifier(Modifier::BOLD))
     .bottom_margin(1);
 
+    let tree = app.tree && app.filter.is_empty();
     let rows: Vec<Row> = app
         .visible
         .iter()
-        .filter_map(|&idx| app.processes.get(idx))
-        .map(|p| {
+        .enumerate()
+        .filter_map(|(row, &idx)| app.processes.get(idx).map(|p| (row, p)))
+        .map(|(row, p)| {
+            let name = if tree {
+                let depth = app.depths.get(row).copied().unwrap_or(0) as usize;
+                if depth == 0 {
+                    p.name.clone()
+                } else {
+                    format!("{}└─ {}", "  ".repeat(depth - 1), p.name)
+                }
+            } else {
+                p.name.clone()
+            };
             Row::new(vec![
                 p.pid.to_string(),
-                p.name.clone(),
+                name,
                 format!("{:.1}", p.cpu),
                 format_bytes(p.mem_bytes),
             ])
@@ -152,15 +165,17 @@ fn draw_process_table(frame: &mut Frame, app: &mut App, area: Rect) {
     .block(
         Block::default()
             .borders(Borders::ALL)
-            .title(if app.filter.is_empty() {
-                format!(" Processes ({}) ", app.processes.len())
-            } else {
+            .title(if !app.filter.is_empty() {
                 format!(
                     " Processes ({}/{}) — filter: {} ",
                     app.visible.len(),
                     app.processes.len(),
                     app.filter
                 )
+            } else if tree {
+                format!(" Processes ({}) — tree ", app.processes.len())
+            } else {
+                format!(" Processes ({}) ", app.processes.len())
             }),
     )
     .row_highlight_style(Style::default().bg(Color::DarkGray).add_modifier(Modifier::BOLD));
@@ -204,6 +219,8 @@ fn draw_footer(frame: &mut Frame, app: &App, area: Rect) {
                     "term/kill  ".into(),
                     "space ".bold().cyan(),
                     "pause  ".into(),
+                    "t ".bold().cyan(),
+                    "tree  ".into(),
                     "c/m/p/n ".bold().cyan(),
                     "sort".into(),
                 ])

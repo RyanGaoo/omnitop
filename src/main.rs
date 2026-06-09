@@ -1,16 +1,19 @@
 mod app;
+mod config;
 mod ui;
 
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
 
 use app::{App, InputMode, KillSignal, SortKey};
+use config::Config;
 
 fn main() -> std::io::Result<()> {
+    let config = Config::load();
     let mut terminal = ratatui::init();
-    let mut app = App::new();
-    let tick_rate = Duration::from_millis(1000);
+    let mut app = App::new(&config);
+    let tick_rate = config.refresh;
     let mut last_tick = Instant::now();
 
     loop {
@@ -65,6 +68,7 @@ fn main() -> std::io::Result<()> {
                                 }
                             }
                             KeyCode::Char(' ') => app.toggle_pause(),
+                            KeyCode::Char('t') => app.toggle_tree(),
                             KeyCode::Char('c') => app.sort_by(SortKey::Cpu),
                             KeyCode::Char('m') => app.sort_by(SortKey::Memory),
                             KeyCode::Char('p') => app.sort_by(SortKey::Pid),

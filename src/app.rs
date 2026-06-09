@@ -1,7 +1,10 @@
-use std::collections::VecDeque;
+use std::collections::{HashMap, HashSet, VecDeque};
 
+use ratatui::style::Color;
 use ratatui::widgets::TableState;
 use sysinfo::{CpuRefreshKind, MemoryRefreshKind, ProcessesToUpdate, RefreshKind, System};
+
+use crate::config::Config;
 
 pub const HISTORY_LEN: usize = 120;
 
@@ -37,6 +40,7 @@ impl KillSignal {
 
 pub struct ProcRow {
     pub pid: u32,
+    pub parent: Option<u32>,
     pub name: String,
     pub cpu: f32,
     pub mem_bytes: u64,
@@ -59,10 +63,13 @@ pub struct App {
     pub paused: bool,
     pub status: Option<String>,
     pub pending_signal: KillSignal,
+    pub tree: bool,
+    pub depths: Vec<u16>,
+    pub accent: Color,
 }
 
 impl App {
-    pub fn new() -> Self {
+    pub fn new(config: &Config) -> Self {
         let mut app = App {
             sys: System::new_all(),
             processes: Vec::new(),
@@ -80,6 +87,9 @@ impl App {
             paused: false,
             status: None,
             pending_signal: KillSignal::Term,
+            tree: false,
+            depths: Vec::new(),
+            accent: config.accent,
         };
         app.refresh();
         app
@@ -112,6 +122,7 @@ impl App {
             .values()
             .map(|p| ProcRow {
                 pid: p.pid().as_u32(),
+                parent: p.parent().map(|pp| pp.as_u32()),
                 name: p.name().to_string_lossy().into_owned(),
                 cpu: p.cpu_usage(),
                 mem_bytes: p.memory(),
@@ -130,18 +141,63 @@ impl App {
 
     pub fn apply_filter(&mut self) {
         let needle = self.filter.to_lowercase();
-        self.visible = self
-            .processes
-            .iter()
-            .enumerate()
-            .filter(|(_, p)| {
-                needle.is_empty()
-                    || p.name.to_lowercase().contains(&needle)
-                    || p.pid.to_string().contains(&needle)
-            })
-            .map(|(i, _)| i)
-            .collect();
+        if self.tree && needle.is_empty() {
+            self.build_tree_order();
+        } else {
+            self.depths.clear();
+            self.visible = self
+                .processes
+                .iter()
+                .enumerate()
+                .filter(|(_, p)| {
+                    needle.is_empty()
+                        || p.name.to_lowercase().contains(&needle)
+                        || p.pid.to_string().contains(&needle)
+                })
+                .map(|(i, _)| i)
+                .collect();
+        }
         self.clamp_selection();
+    }
+
+    pub fn toggle_tree(&mut self) {
+        self.tree = !self.tree;
+        self.status = if self.tree && !self.filter.is_empty() {
+            Some("Tree view active (shown when filter is cleared)".to_string())
+        } else {
+            None
+        };
+        self.apply_filter();
+    }
+
+    fn build_tree_order(&mut self) {
+        let pid_set: HashSet<u32> = self.processes.iter().map(|p| p.pid).collect();
+        let mut children: HashMap<u32, Vec<usize>> = HashMap::new();
+        let mut roots: Vec<usize> = Vec::new();
+
+        for (i, p) in self.processes.iter().enumerate() {
+            match p.parent.filter(|pp| *pp != p.pid && pid_set.contains(pp)) {
+                Some(pp) => children.entry(pp).or_default().push(i),
+                None => roots.push(i),
+            }
+        }
+
+        self.visible.clear();
+        self.depths.clear();
+        let mut seen: HashSet<usize> = HashSet::new();
+        let mut stack: Vec<(usize, u16)> = roots.into_iter().rev().map(|i| (i, 0)).collect();
+        while let Some((idx, depth)) = stack.pop() {
+            if !seen.insert(idx) {
+                continue;
+            }
+            self.visible.push(idx);
+            self.depths.push(depth);
+            if let Some(kids) = children.get(&self.processes[idx].pid) {
+                for &k in kids.iter().rev() {
+                    stack.push((k, depth.saturating_add(1)));
+                }
+            }
+        }
     }
 
     pub fn selected_proc(&self) -> Option<&ProcRow> {
