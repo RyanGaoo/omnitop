@@ -1,6 +1,7 @@
 mod app;
 mod config;
 mod docker;
+mod gpu;
 mod ui;
 
 use std::time::{Duration, Instant};

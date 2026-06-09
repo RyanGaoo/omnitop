@@ -57,16 +57,26 @@ fn draw_tabs(frame: &mut Frame, app: &App, area: Rect) {
 }
 
 fn draw_header(frame: &mut Frame, app: &App, area: Rect) {
-    let halves = Layout::default()
+    let has_gpu = !app.gpus.is_empty();
+    let constraints: Vec<Constraint> = if has_gpu {
+        vec![
+            Constraint::Percentage(40),
+            Constraint::Percentage(35),
+            Constraint::Percentage(25),
+        ]
+    } else {
+        vec![Constraint::Percentage(50), Constraint::Percentage(50)]
+    };
+    let cols = Layout::default()
         .direction(Direction::Horizontal)
-        .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
+        .constraints(constraints)
         .split(area);
 
     let cpu_block = Block::default()
         .borders(Borders::ALL)
         .title(format!(" CPU ({} cores) ", app.per_core.len()));
-    let cpu_inner = cpu_block.inner(halves[0]);
-    frame.render_widget(cpu_block, halves[0]);
+    let cpu_inner = cpu_block.inner(cols[0]);
+    frame.render_widget(cpu_block, cols[0]);
 
     let cpu_rows = Layout::default()
         .direction(Direction::Vertical)
@@ -93,8 +103,8 @@ fn draw_header(frame: &mut Frame, app: &App, area: Rect) {
     frame.render_widget(cpu_spark, cpu_rows[2]);
 
     let mem_block = Block::default().borders(Borders::ALL).title(" Memory ");
-    let mem_inner = mem_block.inner(halves[1]);
-    frame.render_widget(mem_block, halves[1]);
+    let mem_inner = mem_block.inner(cols[1]);
+    frame.render_widget(mem_block, cols[1]);
 
     let mem_rows = Layout::default()
         .direction(Direction::Vertical)
@@ -122,6 +132,56 @@ fn draw_header(frame: &mut Frame, app: &App, area: Rect) {
         .max(100)
         .style(Style::default().fg(Color::Magenta));
     frame.render_widget(mem_spark, mem_rows[1]);
+
+    if has_gpu {
+        draw_gpu_panel(frame, app, cols[2]);
+    }
+}
+
+fn draw_gpu_panel(frame: &mut Frame, app: &App, area: Rect) {
+    let Some(gpu) = app.gpus.first() else {
+        return;
+    };
+    let title = match gpu.name.strip_prefix("AGXAccelerator") {
+        Some(model) if !model.is_empty() => format!(" GPU: Apple {model} "),
+        _ => " GPU ".to_string(),
+    };
+    let block = Block::default().borders(Borders::ALL).title(title);
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+
+    let rows = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(1),
+            Constraint::Length(1),
+            Constraint::Length(2),
+        ])
+        .split(inner);
+
+    let util = gpu.utilization.unwrap_or(0.0);
+    let gauge = Gauge::default()
+        .gauge_style(Style::default().fg(gauge_color(util)))
+        .ratio((util as f64 / 100.0).clamp(0.0, 1.0))
+        .label(format!("{util:.0}%"));
+    frame.render_widget(gauge, rows[0]);
+
+    let mem_line = match (gpu.mem_used, gpu.mem_total) {
+        (Some(u), Some(t)) => format!("mem {} / {}", format_bytes(u), format_bytes(t)),
+        (Some(u), None) => format!("mem {}", format_bytes(u)),
+        _ => "mem n/a".to_string(),
+    };
+    frame.render_widget(
+        Paragraph::new(mem_line).style(Style::default().fg(Color::Gray)),
+        rows[1],
+    );
+
+    let gpu_data: Vec<u64> = app.gpu_history.iter().copied().collect();
+    let gpu_spark = Sparkline::default()
+        .data(&gpu_data)
+        .max(100)
+        .style(Style::default().fg(Color::Green));
+    frame.render_widget(gpu_spark, rows[2]);
 }
 
 fn per_core_line(per_core: &[f32]) -> Paragraph<'static> {

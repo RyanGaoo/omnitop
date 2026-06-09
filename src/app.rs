@@ -6,6 +6,7 @@ use sysinfo::{CpuRefreshKind, MemoryRefreshKind, ProcessesToUpdate, RefreshKind,
 
 use crate::config::Config;
 use crate::docker::{Container, DockerState};
+use crate::gpu::{self, GpuStats};
 
 pub const HISTORY_LEN: usize = 120;
 
@@ -77,6 +78,8 @@ pub struct App {
     pub containers: Vec<Container>,
     pub container_state: TableState,
     pub docker_message: Option<String>,
+    pub gpus: Vec<GpuStats>,
+    pub gpu_history: VecDeque<u64>,
 }
 
 impl App {
@@ -105,6 +108,8 @@ impl App {
             containers: Vec::new(),
             container_state: TableState::default(),
             docker_message: Some("Connecting to container runtime…".to_string()),
+            gpus: Vec::new(),
+            gpu_history: VecDeque::with_capacity(HISTORY_LEN),
         };
         app.refresh();
         app
@@ -130,6 +135,14 @@ impl App {
             0
         };
         push_history(&mut self.mem_history, mem_pct);
+
+        self.gpus = gpu::sample();
+        let gpu_util = self
+            .gpus
+            .first()
+            .and_then(|g| g.utilization)
+            .unwrap_or(0.0);
+        push_history(&mut self.gpu_history, gpu_util as u64);
 
         self.processes = self
             .sys

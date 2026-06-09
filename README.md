@@ -6,7 +6,7 @@ Existing monitors each show a slice: `htop`/`btop` show processes, `docker stats
 
 ## Status
 
-**v0.3 — processes + containers** (working): everything from process monitoring, plus a **Containers tab** that talks directly to the Docker/Podman socket and shows per-container CPU% and memory vs. limits. Switch views with `Tab`.
+**v0.4 — processes + containers + GPU** (working): a **Containers tab** (Docker/Podman over the socket) and a **GPU panel** in the header. On Apple Silicon, GPU utilization and memory are read straight from the IORegistry — **no `sudo` required**.
 
 Process monitoring: live table, search/filter, kill (SIGTERM/SIGKILL), tree view, CPU/memory gauges with history sparklines, per-core bars, sorting, pause, config file.
 
@@ -54,9 +54,10 @@ cargo run --release
   - Per-container CPU% and memory vs. limit, tabbed view
   - _Follow-up (v0.3.x):_ map host processes to containers (Linux cgroups; not possible on macOS where Docker runs in a VM)
   - _Follow-up:_ stop/restart containers from the UI
-- **v0.4 — GPU**
-  - NVIDIA via NVML, Apple Silicon via IOKit/powermetrics
-  - Per-process GPU utilization and VRAM
+- **v0.4 — GPU** ✅
+  - Apple Silicon via IOKit/IORegistry (hand-written FFI, no `sudo`)
+  - GPU utilization gauge + memory + history sparkline in the header
+  - _Follow-up:_ NVIDIA via NVML; per-process GPU attribution
 - **v0.5 — Network**
   - Per-process network throughput (eBPF on Linux, nettop sources on macOS)
 - **v1.0 — Release**
@@ -84,7 +85,10 @@ src/
   ui.rs      — ratatui rendering (tabs, header gauges, process/container tables, footer)
   config.rs  — TOML config loading (refresh rate, accent color)
   docker.rs  — minimal Docker/Podman client over a Unix socket + background poller
+  gpu.rs     — GPU sampling (macOS: hand-written IOKit/CoreFoundation FFI)
 ```
+
+GPU stats on macOS come from the IORegistry's accelerator `PerformanceStatistics` (`Device Utilization %`, `In use system memory`) via hand-written IOKit + CoreFoundation FFI — the same source Activity Monitor uses, readable without elevated privileges. Verified live on Apple Silicon; covered by an ignored hardware test (`cargo test -- --ignored --nocapture live_gpu`).
 
 The Docker client is hand-rolled: it speaks HTTP/1.1 over the runtime's Unix socket (`/var/run/docker.sock` and common Podman/Colima paths), handles chunked transfer encoding, and parses the container list + per-container stats with `serde_json`. Polling runs on a background thread that pushes updates to the UI over an `mpsc` channel, so slow stats calls never block rendering. Pure parsing/CPU-math logic is unit tested (`cargo test`).
 
