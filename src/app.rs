@@ -172,11 +172,19 @@ impl App {
 
     fn build_tree_order(&mut self) {
         let pid_set: HashSet<u32> = self.processes.iter().map(|p| p.pid).collect();
+        // On Unix the OS reparents orphaned processes to init (PID 1). We mirror that:
+        // a process whose parent is unknown (e.g. a root-owned daemon we can't introspect
+        // without privileges) is attached to PID 1 rather than treated as a top-level root.
+        let init_pid = pid_set.contains(&1).then_some(1u32);
         let mut children: HashMap<u32, Vec<usize>> = HashMap::new();
         let mut roots: Vec<usize> = Vec::new();
 
         for (i, p) in self.processes.iter().enumerate() {
-            match p.parent.filter(|pp| *pp != p.pid && pid_set.contains(pp)) {
+            let resolved = p
+                .parent
+                .filter(|pp| *pp != p.pid && pid_set.contains(pp))
+                .or_else(|| init_pid.filter(|&init| init != p.pid));
+            match resolved {
                 Some(pp) => children.entry(pp).or_default().push(i),
                 None => roots.push(i),
             }
