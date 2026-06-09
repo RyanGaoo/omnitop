@@ -361,4 +361,25 @@ mod tests {
         let stats = Stats::default();
         assert_eq!(stats.compute().0, 0.0);
     }
+
+    /// End-to-end check against a real daemon. Ignored by default (needs Docker/Podman
+    /// running). Run with: `cargo test -- --ignored --nocapture live_poll`
+    #[test]
+    #[ignore = "requires a running Docker/Podman daemon"]
+    fn live_poll_finds_containers() {
+        let socket = find_socket().expect("no Docker/Podman socket found");
+        println!("using socket: {}", socket.display());
+        let containers = poll(&socket).expect("poll failed");
+        println!("found {} containers:", containers.len());
+        for c in &containers {
+            println!(
+                "  {:12}  {:16}  {:20}  cpu={:6.2}%  mem={}/{}",
+                c.id, c.name, c.image, c.cpu, c.mem_used, c.mem_limit
+            );
+        }
+        assert!(
+            !containers.is_empty(),
+            "expected at least one running container"
+        );
+    }
 }
