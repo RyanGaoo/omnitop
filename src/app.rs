@@ -1,7 +1,7 @@
 use std::collections::VecDeque;
 
 use ratatui::widgets::TableState;
-use sysinfo::System;
+use sysinfo::{CpuRefreshKind, MemoryRefreshKind, ProcessesToUpdate, RefreshKind, System};
 
 pub const HISTORY_LEN: usize = 120;
 
@@ -69,7 +69,12 @@ impl App {
     }
 
     pub fn refresh(&mut self) {
-        self.sys.refresh_all();
+        self.sys.refresh_specifics(
+            RefreshKind::nothing()
+                .with_cpu(CpuRefreshKind::everything())
+                .with_memory(MemoryRefreshKind::everything()),
+        );
+        self.sys.refresh_processes(ProcessesToUpdate::All, true);
 
         self.cpu_usage = self.sys.global_cpu_usage();
         self.per_core = self.sys.cpus().iter().map(|c| c.cpu_usage()).collect();
