@@ -295,6 +295,7 @@ name = "omnitop"
 version = "0.2.0"
 dependencies = [
  "crossterm",
+ "libc",
  "ratatui",
  "sysinfo",
 ]
