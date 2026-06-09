@@ -182,7 +182,9 @@ fn draw_footer(frame: &mut Frame, app: &App, area: Rect) {
                 .map(|p| format!("{} ({})", p.name, p.pid))
                 .unwrap_or_else(|| "?".to_string());
             Line::from(vec![
-                format!(" Kill {target}? ").bold().red(),
+                format!(" Send {} to {target}? ", app.pending_signal.label())
+                    .bold()
+                    .red(),
                 "y".bold().cyan(),
                 " to confirm, any other key to cancel".into(),
             ])
@@ -198,8 +200,8 @@ fn draw_footer(frame: &mut Frame, app: &App, area: Rect) {
                     "navigate  ".into(),
                     "/ ".bold().cyan(),
                     "filter  ".into(),
-                    "x ".bold().cyan(),
-                    "kill  ".into(),
+                    "x/X ".bold().cyan(),
+                    "term/kill  ".into(),
                     "space ".bold().cyan(),
                     "pause  ".into(),
                     "c/m/p/n ".bold().cyan(),

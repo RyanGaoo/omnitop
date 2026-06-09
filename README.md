@@ -21,7 +21,8 @@ cargo run --release
 | `q` / `Esc`        | Quit                                                 |
 | `↑`/`↓` or `j`/`k` | Navigate process list                                |
 | `/`                | Filter by name or PID (Enter to apply, Esc to clear) |
-| `x`                | Kill selected process (with confirmation)            |
+| `x`                | Kill selected process with SIGTERM (confirmation)    |
+| `X`                | Force-kill with SIGKILL (confirmation)               |
 | `space`            | Pause/resume refresh                                 |
 | `c`                | Sort by CPU                                          |
 | `m`                | Sort by memory                                       |

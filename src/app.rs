@@ -20,6 +20,21 @@ pub enum InputMode {
     ConfirmKill,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum KillSignal {
+    Term,
+    Kill,
+}
+
+impl KillSignal {
+    pub fn label(self) -> &'static str {
+        match self {
+            KillSignal::Term => "SIGTERM",
+            KillSignal::Kill => "SIGKILL",
+        }
+    }
+}
+
 pub struct ProcRow {
     pub pid: u32,
     pub name: String,
@@ -43,6 +58,7 @@ pub struct App {
     pub mem_history: VecDeque<u64>,
     pub paused: bool,
     pub status: Option<String>,
+    pub pending_signal: KillSignal,
 }
 
 impl App {
@@ -63,6 +79,7 @@ impl App {
             mem_history: VecDeque::with_capacity(HISTORY_LEN),
             paused: false,
             status: None,
+            pending_signal: KillSignal::Term,
         };
         app.refresh();
         app
@@ -135,10 +152,11 @@ impl App {
     }
 
     pub fn kill_selected(&mut self) {
+        let signal = self.pending_signal;
         let target = self.selected_proc().map(|p| (p.pid, p.name.clone()));
         if let Some((pid, name)) = target {
-            self.status = Some(match send_sigterm(pid) {
-                Ok(()) => format!("Sent SIGTERM to {name} ({pid})"),
+            self.status = Some(match send_signal(pid, signal) {
+                Ok(()) => format!("Sent {} to {name} ({pid})", signal.label()),
                 Err(e) => format!("Could not kill {name} ({pid}): {e}"),
             });
         }
@@ -207,8 +225,12 @@ fn push_history(history: &mut VecDeque<u64>, value: u64) {
 }
 
 #[cfg(unix)]
-fn send_sigterm(pid: u32) -> Result<(), String> {
-    let ret = unsafe { libc::kill(pid as libc::pid_t, libc::SIGTERM) };
+fn send_signal(pid: u32, signal: KillSignal) -> Result<(), String> {
+    let sig = match signal {
+        KillSignal::Term => libc::SIGTERM,
+        KillSignal::Kill => libc::SIGKILL,
+    };
+    let ret = unsafe { libc::kill(pid as libc::pid_t, sig) };
     if ret == 0 {
         return Ok(());
     }
@@ -221,6 +243,6 @@ fn send_sigterm(pid: u32) -> Result<(), String> {
 }
 
 #[cfg(not(unix))]
-fn send_sigterm(pid: u32) -> Result<(), String> {
+fn send_signal(_pid: u32, _signal: KillSignal) -> Result<(), String> {
     Err("kill not supported on this platform yet".to_string())
 }

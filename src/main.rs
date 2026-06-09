@@ -5,7 +5,7 @@ use std::time::{Duration, Instant};
 
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
 
-use app::{App, InputMode, SortKey};
+use app::{App, InputMode, KillSignal, SortKey};
 
 fn main() -> std::io::Result<()> {
     let mut terminal = ratatui::init();
@@ -54,6 +54,13 @@ fn main() -> std::io::Result<()> {
                             }
                             KeyCode::Char('x') => {
                                 if app.selected_proc().is_some() {
+                                    app.pending_signal = KillSignal::Term;
+                                    app.input_mode = InputMode::ConfirmKill;
+                                }
+                            }
+                            KeyCode::Char('X') => {
+                                if app.selected_proc().is_some() {
+                                    app.pending_signal = KillSignal::Kill;
                                     app.input_mode = InputMode::ConfirmKill;
                                 }
                             }
