@@ -1,24 +1,59 @@
-use ratatui::layout::{Constraint, Direction, Layout, Rect};
+use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style, Stylize};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Borders, Gauge, Paragraph, Row, Sparkline, Table};
+use ratatui::widgets::{Block, Borders, Gauge, Paragraph, Row, Sparkline, Table, Wrap};
 use ratatui::Frame;
 
-use crate::app::{App, InputMode, SortKey};
+use crate::app::{App, InputMode, SortKey, View};
 
 pub fn draw(frame: &mut Frame, app: &mut App) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
+            Constraint::Length(1),
             Constraint::Length(6),
             Constraint::Min(5),
             Constraint::Length(1),
         ])
         .split(frame.area());
 
-    draw_header(frame, app, chunks[0]);
-    draw_process_table(frame, app, chunks[1]);
-    draw_footer(frame, app, chunks[2]);
+    draw_tabs(frame, app, chunks[0]);
+    draw_header(frame, app, chunks[1]);
+    match app.view {
+        View::Processes => draw_process_table(frame, app, chunks[2]),
+        View::Containers => draw_container_view(frame, app, chunks[2]),
+    }
+    draw_footer(frame, app, chunks[3]);
+}
+
+fn draw_tabs(frame: &mut Frame, app: &App, area: Rect) {
+    let tab = |label: &str, active: bool| -> Span {
+        if active {
+            Span::styled(
+                format!(" {label} "),
+                Style::default()
+                    .fg(Color::Black)
+                    .bg(app.accent)
+                    .add_modifier(Modifier::BOLD),
+            )
+        } else {
+            Span::styled(format!(" {label} "), Style::default().fg(Color::Gray))
+        }
+    };
+
+    let container_label = if app.containers.is_empty() {
+        "2 Containers".to_string()
+    } else {
+        format!("2 Containers ({})", app.containers.len())
+    };
+
+    let line = Line::from(vec![
+        Span::styled(" omnitop ", Style::default().add_modifier(Modifier::BOLD)),
+        tab("1 Processes", app.view == View::Processes),
+        Span::raw(" "),
+        tab(&container_label, app.view == View::Containers),
+    ]);
+    frame.render_widget(Paragraph::new(line), area);
 }
 
 fn draw_header(frame: &mut Frame, app: &App, area: Rect) {
@@ -183,6 +218,77 @@ fn draw_process_table(frame: &mut Frame, app: &mut App, area: Rect) {
     frame.render_stateful_widget(table, area, &mut app.table_state);
 }
 
+fn draw_container_view(frame: &mut Frame, app: &mut App, area: Rect) {
+    if let Some(msg) = &app.docker_message {
+        let block = Block::default().borders(Borders::ALL).title(" Containers ");
+        let paragraph = Paragraph::new(msg.clone())
+            .block(block)
+            .alignment(Alignment::Center)
+            .wrap(Wrap { trim: true })
+            .style(Style::default().fg(Color::Gray));
+        frame.render_widget(paragraph, area);
+        return;
+    }
+
+    let header = Row::new(vec!["ID", "NAME", "IMAGE", "STATUS", "CPU%", "MEM"])
+        .style(Style::default().add_modifier(Modifier::BOLD))
+        .bottom_margin(1);
+
+    let rows: Vec<Row> = app
+        .containers
+        .iter()
+        .map(|c| {
+            let mem = if c.mem_limit > 0 {
+                format!(
+                    "{} / {}",
+                    format_bytes(c.mem_used),
+                    format_bytes(c.mem_limit)
+                )
+            } else {
+                format_bytes(c.mem_used)
+            };
+            Row::new(vec![
+                c.id.clone(),
+                truncate(&c.name, 24),
+                truncate(&c.image, 28),
+                truncate(&c.status, 18),
+                format!("{:.1}", c.cpu),
+                mem,
+            ])
+        })
+        .collect();
+
+    let table = Table::new(
+        rows,
+        [
+            Constraint::Length(13),
+            Constraint::Min(16),
+            Constraint::Length(30),
+            Constraint::Length(20),
+            Constraint::Length(8),
+            Constraint::Length(22),
+        ],
+    )
+    .header(header)
+    .block(
+        Block::default()
+            .borders(Borders::ALL)
+            .title(format!(" Containers ({}) ", app.containers.len())),
+    )
+    .row_highlight_style(Style::default().bg(Color::DarkGray).add_modifier(Modifier::BOLD));
+
+    frame.render_stateful_widget(table, area, &mut app.container_state);
+}
+
+fn truncate(s: &str, max: usize) -> String {
+    if s.chars().count() <= max {
+        s.to_string()
+    } else {
+        let kept: String = s.chars().take(max.saturating_sub(1)).collect();
+        format!("{kept}…")
+    }
+}
+
 fn draw_footer(frame: &mut Frame, app: &App, area: Rect) {
     let line = match app.input_mode {
         InputMode::Filter => Line::from(vec![
@@ -208,22 +314,33 @@ fn draw_footer(frame: &mut Frame, app: &App, area: Rect) {
             if let Some(status) = &app.status {
                 Line::from(vec![" ".into(), status.clone().yellow()])
             } else {
-                Line::from(vec![
-                    " q ".bold().cyan(),
-                    "quit  ".into(),
-                    "↑/↓ ".bold().cyan(),
-                    "navigate  ".into(),
-                    "/ ".bold().cyan(),
-                    "filter  ".into(),
-                    "x/X ".bold().cyan(),
-                    "term/kill  ".into(),
-                    "space ".bold().cyan(),
-                    "pause  ".into(),
-                    "t ".bold().cyan(),
-                    "tree  ".into(),
-                    "c/m/p/n ".bold().cyan(),
-                    "sort".into(),
-                ])
+                match app.view {
+                    View::Processes => Line::from(vec![
+                        " q ".bold().cyan(),
+                        "quit  ".into(),
+                        "Tab ".bold().cyan(),
+                        "view  ".into(),
+                        "↑/↓ ".bold().cyan(),
+                        "navigate  ".into(),
+                        "/ ".bold().cyan(),
+                        "filter  ".into(),
+                        "x/X ".bold().cyan(),
+                        "term/kill  ".into(),
+                        "t ".bold().cyan(),
+                        "tree  ".into(),
+                        "c/m/p/n ".bold().cyan(),
+                        "sort".into(),
+                    ]),
+                    View::Containers => Line::from(vec![
+                        " q ".bold().cyan(),
+                        "quit  ".into(),
+                        "Tab ".bold().cyan(),
+                        "view  ".into(),
+                        "↑/↓ ".bold().cyan(),
+                        "navigate  ".into(),
+                        "refresh every 2s".dark_gray(),
+                    ]),
+                }
             }
         }
     };

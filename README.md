@@ -6,7 +6,9 @@ Existing monitors each show a slice: `htop`/`btop` show processes, `docker stats
 
 ## Status
 
-**v0.25 — interactive process monitoring** (working): live process table, search/filter, kill (SIGTERM/SIGKILL), process tree view, CPU/memory gauges with history sparklines, per-core bars, sorting, pause, config file.
+**v0.3 — processes + containers** (working): everything from process monitoring, plus a **Containers tab** that talks directly to the Docker/Podman socket and shows per-container CPU% and memory vs. limits. Switch views with `Tab`.
+
+Process monitoring: live table, search/filter, kill (SIGTERM/SIGKILL), tree view, CPU/memory gauges with history sparklines, per-core bars, sorting, pause, config file.
 
 ## Install / Run
 
@@ -19,7 +21,9 @@ cargo run --release
 | Key                | Action                                               |
 | ------------------ | ---------------------------------------------------- |
 | `q` / `Esc`        | Quit                                                 |
-| `↑`/`↓` or `j`/`k` | Navigate process list                                |
+| `Tab`              | Switch between Processes and Containers views        |
+| `1` / `2`          | Jump to Processes / Containers view                  |
+| `↑`/`↓` or `j`/`k` | Navigate the current list                            |
 | `/`                | Filter by name or PID (Enter to apply, Esc to clear) |
 | `x`                | Kill selected process with SIGTERM (confirmation)    |
 | `X`                | Force-kill with SIGKILL (confirmation)               |
@@ -44,10 +48,12 @@ cargo run --release
 - **v0.25 — Polish** ✅
   - Process tree view (`t`)
   - Config file (refresh rate, accent color)
-- **v0.3 — Containers**
-  - Docker/Podman socket integration
-  - Container CPU/mem vs. limits, restart counts
-  - Map host processes to their containers
+- **v0.3 — Containers** ✅
+  - Docker/Podman socket integration (minimal HTTP-over-Unix-socket client, no async deps)
+  - Background poller thread keeps the UI responsive
+  - Per-container CPU% and memory vs. limit, tabbed view
+  - _Follow-up (v0.3.x):_ map host processes to containers (Linux cgroups; not possible on macOS where Docker runs in a VM)
+  - _Follow-up:_ stop/restart containers from the UI
 - **v0.4 — GPU**
   - NVIDIA via NVML, Apple Silicon via IOKit/powermetrics
   - Per-process GPU utilization and VRAM
@@ -73,11 +79,14 @@ accent = "cyan"
 
 ```
 src/
-  main.rs    — event loop (input + config-driven refresh tick)
-  app.rs     — application state, sampling via sysinfo, sorting, tree ordering
-  ui.rs      — ratatui rendering (header gauges, process table, footer)
+  main.rs    — event loop (input + config-driven refresh tick + docker channel drain)
+  app.rs     — application state, sampling via sysinfo, sorting, tree ordering, views
+  ui.rs      — ratatui rendering (tabs, header gauges, process/container tables, footer)
   config.rs  — TOML config loading (refresh rate, accent color)
+  docker.rs  — minimal Docker/Podman client over a Unix socket + background poller
 ```
+
+The Docker client is hand-rolled: it speaks HTTP/1.1 over the runtime's Unix socket (`/var/run/docker.sock` and common Podman/Colima paths), handles chunked transfer encoding, and parses the container list + per-container stats with `serde_json`. Polling runs on a background thread that pushes updates to the UI over an `mpsc` channel, so slow stats calls never block rendering. Pure parsing/CPU-math logic is unit tested (`cargo test`).
 
 The `sysinfo` crate is the initial sampling backend; the plan is to replace hot paths with direct `/proc` (Linux) and `libproc` (macOS) readers as profiling demands.
 

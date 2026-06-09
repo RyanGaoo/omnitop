@@ -5,6 +5,7 @@ use ratatui::widgets::TableState;
 use sysinfo::{CpuRefreshKind, MemoryRefreshKind, ProcessesToUpdate, RefreshKind, System};
 
 use crate::config::Config;
+use crate::docker::{Container, DockerState};
 
 pub const HISTORY_LEN: usize = 120;
 
@@ -21,6 +22,12 @@ pub enum InputMode {
     Normal,
     Filter,
     ConfirmKill,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum View {
+    Processes,
+    Containers,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -66,6 +73,10 @@ pub struct App {
     pub tree: bool,
     pub depths: Vec<u16>,
     pub accent: Color,
+    pub view: View,
+    pub containers: Vec<Container>,
+    pub container_state: TableState,
+    pub docker_message: Option<String>,
 }
 
 impl App {
@@ -90,6 +101,10 @@ impl App {
             tree: false,
             depths: Vec::new(),
             accent: config.accent,
+            view: View::Processes,
+            containers: Vec::new(),
+            container_state: TableState::default(),
+            docker_message: Some("Connecting to container runtime…".to_string()),
         };
         app.refresh();
         app
@@ -226,6 +241,44 @@ impl App {
         }
     }
 
+    pub fn toggle_view(&mut self) {
+        self.view = match self.view {
+            View::Processes => View::Containers,
+            View::Containers => View::Processes,
+        };
+    }
+
+    pub fn set_view(&mut self, view: View) {
+        self.view = view;
+    }
+
+    pub fn set_docker(&mut self, state: DockerState) {
+        match state {
+            DockerState::Containers(containers) => {
+                self.containers = containers;
+                self.docker_message = None;
+                if self.containers.is_empty() {
+                    self.container_state.select(None);
+                } else {
+                    let sel = self.container_state.selected().unwrap_or(0);
+                    self.container_state
+                        .select(Some(sel.min(self.containers.len() - 1)));
+                }
+            }
+            DockerState::Disabled => {
+                self.containers.clear();
+                self.container_state.select(None);
+                self.docker_message =
+                    Some("No Docker or Podman socket found — is the daemon running?".to_string());
+            }
+            DockerState::Error(e) => {
+                self.containers.clear();
+                self.container_state.select(None);
+                self.docker_message = Some(format!("Container runtime error: {e}"));
+            }
+        }
+    }
+
     pub fn toggle_pause(&mut self) {
         self.paused = !self.paused;
         self.status = if self.paused {
@@ -259,26 +312,30 @@ impl App {
     }
 
     pub fn next(&mut self) {
-        if self.visible.is_empty() {
-            return;
+        match self.view {
+            View::Processes => move_selection(&mut self.table_state, self.visible.len(), 1),
+            View::Containers => move_selection(&mut self.container_state, self.containers.len(), 1),
         }
-        let i = match self.table_state.selected() {
-            Some(i) => (i + 1).min(self.visible.len() - 1),
-            None => 0,
-        };
-        self.table_state.select(Some(i));
     }
 
     pub fn previous(&mut self) {
-        if self.visible.is_empty() {
-            return;
+        match self.view {
+            View::Processes => move_selection(&mut self.table_state, self.visible.len(), -1),
+            View::Containers => {
+                move_selection(&mut self.container_state, self.containers.len(), -1)
+            }
         }
-        let i = match self.table_state.selected() {
-            Some(i) => i.saturating_sub(1),
-            None => 0,
-        };
-        self.table_state.select(Some(i));
     }
+}
+
+fn move_selection(state: &mut TableState, len: usize, delta: i32) {
+    if len == 0 {
+        state.select(None);
+        return;
+    }
+    let current = state.selected().unwrap_or(0) as i32;
+    let next = (current + delta).clamp(0, len as i32 - 1);
+    state.select(Some(next as usize));
 }
 
 fn push_history(history: &mut VecDeque<u64>, value: u64) {

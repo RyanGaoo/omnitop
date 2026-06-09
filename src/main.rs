@@ -1,22 +1,28 @@
 mod app;
 mod config;
+mod docker;
 mod ui;
 
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
 
-use app::{App, InputMode, KillSignal, SortKey};
+use app::{App, InputMode, KillSignal, SortKey, View};
 use config::Config;
 
 fn main() -> std::io::Result<()> {
     let config = Config::load();
+    let docker_rx = docker::spawn_poller(Duration::from_secs(2));
     let mut terminal = ratatui::init();
     let mut app = App::new(&config);
     let tick_rate = config.refresh;
     let mut last_tick = Instant::now();
 
     loop {
+        while let Ok(state) = docker_rx.try_recv() {
+            app.set_docker(state);
+        }
+
         terminal.draw(|frame| ui::draw(frame, &mut app))?;
 
         let timeout = tick_rate.saturating_sub(last_tick.elapsed());
@@ -55,14 +61,17 @@ fn main() -> std::io::Result<()> {
                                 app.status = None;
                                 app.input_mode = InputMode::Filter;
                             }
+                            KeyCode::Tab => app.toggle_view(),
+                            KeyCode::Char('1') => app.set_view(View::Processes),
+                            KeyCode::Char('2') => app.set_view(View::Containers),
                             KeyCode::Char('x') => {
-                                if app.selected_proc().is_some() {
+                                if app.view == View::Processes && app.selected_proc().is_some() {
                                     app.pending_signal = KillSignal::Term;
                                     app.input_mode = InputMode::ConfirmKill;
                                 }
                             }
                             KeyCode::Char('X') => {
-                                if app.selected_proc().is_some() {
+                                if app.view == View::Processes && app.selected_proc().is_some() {
                                     app.pending_signal = KillSignal::Kill;
                                     app.input_mode = InputMode::ConfirmKill;
                                 }
