@@ -36,8 +36,18 @@ Other tools each cover one slice; omnitop unifies them in a single TUI.
 
 ## Install / Run
 
-omnitop is built from source with Cargo. First install the Rust toolchain from
-[rustup.rs](https://rustup.rs), then:
+Install the Rust toolchain from [rustup.rs](https://rustup.rs), then install omnitop
+from crates.io:
+
+```sh
+cargo install omnitop
+omnitop
+```
+
+This builds and drops the `omnitop` binary into `~/.cargo/bin` (make sure that's on your
+`PATH`). To update later, run `cargo install omnitop` again.
+
+### From source
 
 ```sh
 git clone https://github.com/RyanGaoo/omnitop
@@ -45,8 +55,7 @@ cd omnitop
 cargo run --release
 ```
 
-The binary lands at `target/release/omnitop`. (Once published, `cargo install omnitop`
-will also work.)
+The binary lands at `target/release/omnitop`.
 
 ### Windows
 
@@ -57,9 +66,8 @@ will also work.)
    colors — the legacy console renders the gauges poorly):
 
    ```powershell
-   git clone https://github.com/RyanGaoo/omnitop
-   cd omnitop
-   cargo run --release
+   cargo install omnitop
+   omnitop
    ```
 
 On Windows you get the full process view including kill (via `TerminateProcess`) and,
