@@ -3,6 +3,8 @@
 A unified system monitor for the modern stack: **processes, containers, GPU, and per-process network — one pane of glass, one TUI.**
 
 [![CI](https://github.com/RyanGaoo/omnitop/actions/workflows/ci.yml/badge.svg)](https://github.com/RyanGaoo/omnitop/actions/workflows/ci.yml)
+[![crates.io](https://img.shields.io/crates/v/omnitop.svg)](https://crates.io/crates/omnitop)
+[![License: MIT](https://img.shields.io/crates/l/omnitop.svg)](https://crates.io/crates/omnitop)
 
 ![omnitop demo](https://raw.githubusercontent.com/RyanGaoo/omnitop/main/docs/demo.gif)
 
