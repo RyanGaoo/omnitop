@@ -2,6 +2,8 @@
 
 A unified system monitor for the modern stack: **processes, containers, GPU, and per-process network — one pane of glass, one TUI.**
 
+![omnitop demo](https://raw.githubusercontent.com/RyanGaoo/omnitop/main/docs/demo.gif)
+
 Existing monitors each show a slice: `htop`/`btop` show processes, `docker stats` shows containers, `nvidia-smi`/`asitop` show GPU, `nethogs` shows network. omnitop's goal is all of it, in one fast, beautiful terminal UI.
 
 ## Status
@@ -9,6 +11,24 @@ Existing monitors each show a slice: `htop`/`btop` show processes, `docker stats
 **v0.5 — the full stack in one TUI** (working): processes, Docker/Podman containers, GPU, **and per-process network throughput** — the original goal. On macOS, per-process RX/TX comes from the built-in `nettop` (**no `sudo`**); the process table gains `RX/s`/`TX/s` columns and a live network total.
 
 Process monitoring: live table, search/filter, kill (SIGTERM/SIGKILL), tree view, CPU/memory gauges with history sparklines, per-core bars, sorting, pause, config file. **Containers tab** (`Tab`/`2`) and a **GPU panel** read from the IORegistry.
+
+## How it compares
+
+Other tools each cover one slice; omnitop unifies them in a single TUI.
+
+|                            | **omnitop** | htop | btop | ctop | nvtop | nethogs |
+| -------------------------- | :---------: | :--: | :--: | :--: | :---: | :-----: |
+| Processes (CPU/mem)        |     ✅      |  ✅  |  ✅  |  —   |   —   |    —    |
+| Process tree               |     ✅      |  ✅  |  ✅  |  —   |   —   |    —    |
+| Kill / signal              |     ✅      |  ✅  |  ✅  |  —   |   —   |    —    |
+| Containers (Docker/Podman) |     ✅      |  —   |  —   |  ✅  |   —   |    —    |
+| GPU utilization            |    ✅ ¹     |  —   | ✅ ² |  —   | ✅ ²  |    —    |
+| Per-process network        |    ✅ ¹     |  —   |  —   |  —   |   —   |  ✅ ²   |
+| Everything in one TUI      |     ✅      |  —   |  —   |  —   |   —   |    —    |
+| Runs without root          |     ✅      |  ✅  |  ✅  |  ✅  |  ✅   |   ❌    |
+
+¹ omnitop's GPU and per-process network are macOS today; Linux is on the roadmap.
+² btop/nvtop GPU is Linux (NVIDIA/AMD/Intel); nethogs network is Linux and requires root.
 
 ## Install / Run
 
@@ -18,21 +38,18 @@ cargo run --release
 
 ## Keybindings
 
-| Key                | Action                                               |
-| ------------------ | ---------------------------------------------------- |
-| `q` / `Esc`        | Quit                                                 |
-| `Tab`              | Switch between Processes and Containers views        |
-| `1` / `2`          | Jump to Processes / Containers view                  |
-| `↑`/`↓` or `j`/`k` | Navigate the current list                            |
-| `/`                | Filter by name or PID (Enter to apply, Esc to clear) |
-| `x`                | Kill selected process with SIGTERM (confirmation)    |
-| `X`                | Force-kill with SIGKILL (confirmation)               |
-| `t`                | Toggle process tree view                             |
-| `space`            | Pause/resume refresh                                 |
-| `c`                | Sort by CPU                                          |
-| `m`                | Sort by memory                                       |
-| `p`                | Sort by PID                                          |
-| `n`                | Sort by name                                         |
+| Key                | Action                                                     |
+| ------------------ | ---------------------------------------------------------- |
+| `q` / `Esc`        | Quit                                                       |
+| `Tab`              | Switch between Processes and Containers views              |
+| `1` / `2`          | Jump to Processes / Containers view                        |
+| `↑`/`↓` or `j`/`k` | Navigate the current list                                  |
+| `/`                | Filter by name or PID (Enter to apply, Esc to clear)       |
+| `x`                | Kill selected process with SIGTERM (confirmation)          |
+| `X`                | Force-kill with SIGKILL (confirmation)                     |
+| `t`                | Toggle process tree view                                   |
+| `space`            | Pause/resume refresh                                       |
+| `c`/`m`/`p`/`n`    | Sort by CPU / memory / PID / name (press again to reverse) |
 
 ## Roadmap
 
