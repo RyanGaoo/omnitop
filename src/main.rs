@@ -2,6 +2,7 @@ mod app;
 mod config;
 mod docker;
 mod gpu;
+mod net;
 mod ui;
 
 use std::time::{Duration, Instant};
@@ -14,6 +15,7 @@ use config::Config;
 fn main() -> std::io::Result<()> {
     let config = Config::load();
     let docker_rx = docker::spawn_poller(Duration::from_secs(2));
+    let net_rx = net::spawn_poller(Duration::from_secs(2));
     let mut terminal = ratatui::init();
     let mut app = App::new(&config);
     let tick_rate = config.refresh;
@@ -22,6 +24,9 @@ fn main() -> std::io::Result<()> {
     loop {
         while let Ok(state) = docker_rx.try_recv() {
             app.set_docker(state);
+        }
+        while let Ok(rates) = net_rx.try_recv() {
+            app.set_net_rates(rates);
         }
 
         terminal.draw(|frame| ui::draw(frame, &mut app))?;

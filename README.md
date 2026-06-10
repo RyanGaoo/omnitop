@@ -6,9 +6,9 @@ Existing monitors each show a slice: `htop`/`btop` show processes, `docker stats
 
 ## Status
 
-**v0.4 — processes + containers + GPU** (working): a **Containers tab** (Docker/Podman over the socket) and a **GPU panel** in the header. On Apple Silicon, GPU utilization and memory are read straight from the IORegistry — **no `sudo` required**.
+**v0.5 — the full stack in one TUI** (working): processes, Docker/Podman containers, GPU, **and per-process network throughput** — the original goal. On macOS, per-process RX/TX comes from the built-in `nettop` (**no `sudo`**); the process table gains `RX/s`/`TX/s` columns and a live network total.
 
-Process monitoring: live table, search/filter, kill (SIGTERM/SIGKILL), tree view, CPU/memory gauges with history sparklines, per-core bars, sorting, pause, config file.
+Process monitoring: live table, search/filter, kill (SIGTERM/SIGKILL), tree view, CPU/memory gauges with history sparklines, per-core bars, sorting, pause, config file. **Containers tab** (`Tab`/`2`) and a **GPU panel** read from the IORegistry.
 
 ## Install / Run
 
@@ -58,8 +58,10 @@ cargo run --release
   - Apple Silicon via IOKit/IORegistry (hand-written FFI, no `sudo`)
   - GPU utilization gauge + memory + history sparkline in the header
   - _Follow-up:_ NVIDIA via NVML; per-process GPU attribution
-- **v0.5 — Network**
-  - Per-process network throughput (eBPF on Linux, nettop sources on macOS)
+- **v0.5 — Network** ✅
+  - Per-process network throughput on macOS via `nettop` (no `sudo`), background poller diffing cumulative counters into live rates
+  - `RX/s`/`TX/s` columns + aggregate network total in the process view
+  - _Follow-up:_ Linux per-process network (eBPF / nethogs-style capture); sort by throughput
 - **v1.0 — Release**
   - Homebrew tap, prebuilt binaries, AUR package
   - Benchmarks: omnitop's own overhead vs. htop/btop
@@ -86,7 +88,10 @@ src/
   config.rs  — TOML config loading (refresh rate, accent color)
   docker.rs  — minimal Docker/Podman client over a Unix socket + background poller
   gpu.rs     — GPU sampling (macOS: hand-written IOKit/CoreFoundation FFI)
+  net.rs     — per-process network rates (macOS: nettop poller + cumulative-counter diffing)
 ```
+
+Per-process network on macOS samples `nettop` on a background thread and diffs consecutive cumulative byte counters into per-second rates, keyed by pid (the parser keeps process names containing spaces intact). Like the container poller, it runs off the UI thread and pushes updates over an `mpsc` channel. Parsing is unit tested; the full pipeline has an ignored live test (`cargo test -- --ignored --nocapture live_net`).
 
 GPU stats on macOS come from the IORegistry's accelerator `PerformanceStatistics` (`Device Utilization %`, `In use system memory`) via hand-written IOKit + CoreFoundation FFI — the same source Activity Monitor uses, readable without elevated privileges. Verified live on Apple Silicon; covered by an ignored hardware test (`cargo test -- --ignored --nocapture live_gpu`).
 

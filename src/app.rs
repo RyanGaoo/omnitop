@@ -7,6 +7,7 @@ use sysinfo::{CpuRefreshKind, MemoryRefreshKind, ProcessesToUpdate, RefreshKind,
 use crate::config::Config;
 use crate::docker::{Container, DockerState};
 use crate::gpu::{self, GpuStats};
+use crate::net::NetRates;
 
 pub const HISTORY_LEN: usize = 120;
 
@@ -80,6 +81,7 @@ pub struct App {
     pub docker_message: Option<String>,
     pub gpus: Vec<GpuStats>,
     pub gpu_history: VecDeque<u64>,
+    pub net_rates: NetRates,
 }
 
 impl App {
@@ -110,6 +112,7 @@ impl App {
             docker_message: Some("Connecting to container runtime…".to_string()),
             gpus: Vec::new(),
             gpu_history: VecDeque::with_capacity(HISTORY_LEN),
+            net_rates: NetRates::new(),
         };
         app.refresh();
         app
@@ -290,6 +293,17 @@ impl App {
                 self.docker_message = Some(format!("Container runtime error: {e}"));
             }
         }
+    }
+
+    pub fn set_net_rates(&mut self, rates: NetRates) {
+        self.net_rates = rates;
+    }
+
+    /// Aggregate (rx, tx) throughput across all processes, in bytes per second.
+    pub fn net_totals(&self) -> (u64, u64) {
+        self.net_rates.values().fold((0, 0), |(rx, tx), rate| {
+            (rx + rate.rx_bps, tx + rate.tx_bps)
+        })
     }
 
     pub fn toggle_pause(&mut self) {

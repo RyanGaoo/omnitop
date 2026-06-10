@@ -217,6 +217,8 @@ fn draw_process_table(frame: &mut Frame, app: &mut App, area: Rect) {
         Line::from(sort_label(SortKey::Name, "NAME")),
         Line::from(sort_label(SortKey::Cpu, "CPU%")),
         Line::from(sort_label(SortKey::Memory, "MEM")),
+        Line::from("RX/s"),
+        Line::from("TX/s"),
     ])
     .style(Style::default().add_modifier(Modifier::BOLD))
     .bottom_margin(1);
@@ -238,14 +240,42 @@ fn draw_process_table(frame: &mut Frame, app: &mut App, area: Rect) {
             } else {
                 p.name.clone()
             };
+            let rate = app.net_rates.get(&p.pid).copied().unwrap_or_default();
             Row::new(vec![
                 p.pid.to_string(),
                 name,
                 format!("{:.1}", p.cpu),
                 format_bytes(p.mem_bytes),
+                fmt_rate(rate.rx_bps),
+                fmt_rate(rate.tx_bps),
             ])
         })
         .collect();
+
+    let title = if !app.filter.is_empty() {
+        format!(
+            " Processes ({}/{}) — filter: {} ",
+            app.visible.len(),
+            app.processes.len(),
+            app.filter
+        )
+    } else if tree {
+        format!(" Processes ({}) — tree ", app.processes.len())
+    } else {
+        format!(" Processes ({}) ", app.processes.len())
+    };
+    let mut block = Block::default().borders(Borders::ALL).title(title);
+    let (rx_total, tx_total) = app.net_totals();
+    if rx_total > 0 || tx_total > 0 {
+        block = block.title_bottom(
+            Line::from(format!(
+                " net ↓{}/s  ↑{}/s ",
+                format_bytes(rx_total),
+                format_bytes(tx_total)
+            ))
+            .right_aligned(),
+        );
+    }
 
     let table = Table::new(
         rows,
@@ -254,25 +284,12 @@ fn draw_process_table(frame: &mut Frame, app: &mut App, area: Rect) {
             Constraint::Min(20),
             Constraint::Length(8),
             Constraint::Length(12),
+            Constraint::Length(11),
+            Constraint::Length(11),
         ],
     )
     .header(header)
-    .block(
-        Block::default()
-            .borders(Borders::ALL)
-            .title(if !app.filter.is_empty() {
-                format!(
-                    " Processes ({}/{}) — filter: {} ",
-                    app.visible.len(),
-                    app.processes.len(),
-                    app.filter
-                )
-            } else if tree {
-                format!(" Processes ({}) — tree ", app.processes.len())
-            } else {
-                format!(" Processes ({}) ", app.processes.len())
-            }),
-    )
+    .block(block)
     .row_highlight_style(Style::default().bg(Color::DarkGray).add_modifier(Modifier::BOLD));
 
     frame.render_stateful_widget(table, area, &mut app.table_state);
@@ -429,5 +446,14 @@ fn format_bytes(bytes: u64) -> String {
         format!("{} {}", bytes, UNITS[unit])
     } else {
         format!("{:.1} {}", value, UNITS[unit])
+    }
+}
+
+/// Format a per-second byte rate for the process table; idle processes show a dash.
+fn fmt_rate(bps: u64) -> String {
+    if bps == 0 {
+        "-".to_string()
+    } else {
+        format!("{}/s", format_bytes(bps))
     }
 }
