@@ -58,21 +58,22 @@ will also work.)
    cargo run --release
    ```
 
-On Windows you get the process view and (with an NVIDIA GPU) the GPU panel. Container
-monitoring needs a Unix socket and isn't wired up on Windows yet — but it works today if
-you run omnitop **inside WSL2** (where Docker exposes a Unix socket).
+On Windows you get the full process view including kill (via `TerminateProcess`) and,
+with an NVIDIA GPU, the GPU panel. Container monitoring needs a Unix socket and isn't
+wired up on Windows yet — but it works today if you run omnitop **inside WSL2** (where
+Docker exposes a Unix socket).
 
 ### Platform support
 
 | Feature                                 |      macOS       |   Linux   |  Windows  |
 | --------------------------------------- | :--------------: | :-------: | :-------: |
 | Processes — view / tree / sort / filter |        ✅        |    ✅     |    ✅     |
-| Kill / signal processes                 |        ✅        |    ✅     |    — ¹    |
+| Kill / signal processes                 |        ✅        |    ✅     |   ✅ ¹    |
 | Containers (Docker/Podman)              |        ✅        |    ✅     |    — ²    |
 | GPU                                     | ✅ Apple Silicon | ✅ NVIDIA | ✅ NVIDIA |
 | Per-process network                     |        ✅        |    — ³    |    — ³    |
 
-¹ Process termination uses POSIX signals; a Windows `TerminateProcess` path is planned.
+¹ Windows has no POSIX signals, so both `x` and `X` do a hard `TerminateProcess` (like `SIGKILL`).
 ² Windows Docker is reached over a named pipe (planned); containers work today under WSL2.
 ³ Per-process network is macOS-only today (via `nettop`); Linux/Windows are on the roadmap.
 

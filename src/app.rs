@@ -421,7 +421,33 @@ fn send_signal(pid: u32, signal: KillSignal) -> Result<(), String> {
     })
 }
 
-#[cfg(not(unix))]
+// Windows has no POSIX signals; TerminateProcess is a hard stop (equivalent to SIGKILL),
+// so both the `x` (term) and `X` (kill) bindings map to it here.
+#[cfg(windows)]
+fn send_signal(pid: u32, _signal: KillSignal) -> Result<(), String> {
+    use windows_sys::Win32::Foundation::CloseHandle;
+    use windows_sys::Win32::System::Threading::{OpenProcess, TerminateProcess, PROCESS_TERMINATE};
+
+    // SAFETY: we request a handle with terminate rights, use it, and always close it.
+    unsafe {
+        let handle = OpenProcess(PROCESS_TERMINATE, 0, pid);
+        if handle.is_null() {
+            return Err(format!(
+                "cannot open process (already exited or access denied): {}",
+                std::io::Error::last_os_error()
+            ));
+        }
+        let terminated = TerminateProcess(handle, 1);
+        let err = std::io::Error::last_os_error();
+        CloseHandle(handle);
+        if terminated == 0 {
+            return Err(format!("terminate failed: {err}"));
+        }
+    }
+    Ok(())
+}
+
+#[cfg(not(any(unix, windows)))]
 fn send_signal(_pid: u32, _signal: KillSignal) -> Result<(), String> {
-    Err("kill not supported on this platform yet".to_string())
+    Err("kill is not supported on this platform yet".to_string())
 }

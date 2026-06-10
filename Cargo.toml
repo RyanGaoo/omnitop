@@ -22,6 +22,10 @@ toml = "0.8"
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
 
+# Process termination on Windows (no POSIX signals there): OpenProcess + TerminateProcess.
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_System_Threading"] }
+
 [target.'cfg(target_os = "macos")'.dependencies]
 core-foundation-sys = "0.8"
 

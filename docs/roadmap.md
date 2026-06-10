@@ -30,7 +30,10 @@ Status of each milestone. Shipped items are checked.
   - Per-process network throughput on macOS via `nettop` (no `sudo`), background poller diffing cumulative counters into live rates
   - `RX/s`/`TX/s` columns + aggregate network total + sort by throughput (`N`)
   - _Follow-up:_ Linux per-process network (eBPF / nethogs-style capture)
+- **Cross-platform** ✅
+  - Compiles and runs on macOS, Linux, and Windows
+  - Windows process kill via `TerminateProcess` (no POSIX signals there)
+  - _Follow-up:_ container monitoring on Windows via the Docker named pipe
 - **v1.0 — Release**
-  - Windows process termination (TerminateProcess)
   - Homebrew tap, prebuilt binaries, AUR package
   - Benchmarks: omnitop's own overhead vs. htop/btop
