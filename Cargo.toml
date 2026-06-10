@@ -9,7 +9,7 @@ homepage = "https://github.com/RyanGaoo/omnitop"
 readme = "README.md"
 keywords = ["tui", "monitor", "htop", "system", "cli"]
 categories = ["command-line-utilities", "visualization"]
-exclude = ["docs/demo.gif", "*.tape"]
+exclude = ["docs/", "*.tape"]
 
 [dependencies]
 ratatui = "0.29"
