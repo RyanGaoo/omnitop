@@ -212,14 +212,25 @@ fn draw_process_table(frame: &mut Frame, app: &mut App, area: Rect) {
             Span::raw(label.to_string())
         }
     };
+    // RX/s and TX/s sort together (by combined throughput), so both show the indicator.
+    let net_header = |label: &str| -> Span {
+        if app.sort_key == SortKey::Net {
+            Span::styled(
+                format!("{label} {arrow}"),
+                Style::default().add_modifier(Modifier::BOLD).fg(accent),
+            )
+        } else {
+            Span::raw(label.to_string())
+        }
+    };
 
     let header = Row::new(vec![
         Line::from(sort_label(SortKey::Pid, "PID")),
         Line::from(sort_label(SortKey::Name, "NAME")),
         Line::from(sort_label(SortKey::Cpu, "CPU%")),
         Line::from(sort_label(SortKey::Memory, "MEM")),
-        Line::from("RX/s"),
-        Line::from("TX/s"),
+        Line::from(net_header("RX/s")),
+        Line::from(net_header("TX/s")),
     ])
     .style(Style::default().add_modifier(Modifier::BOLD))
     .bottom_margin(1);
@@ -406,7 +417,7 @@ fn draw_footer(frame: &mut Frame, app: &App, area: Rect) {
                         "term/kill  ".into(),
                         "t ".bold().cyan(),
                         "tree  ".into(),
-                        "c/m/p/n ".bold().cyan(),
+                        "c/m/p/n/N ".bold().cyan(),
                         "sort".into(),
                     ]),
                     View::Containers => Line::from(vec![
@@ -416,7 +427,10 @@ fn draw_footer(frame: &mut Frame, app: &App, area: Rect) {
                         "view  ".into(),
                         "↑/↓ ".bold().cyan(),
                         "navigate  ".into(),
-                        "refresh every 2s".dark_gray(),
+                        "s ".bold().cyan(),
+                        "stop  ".into(),
+                        "r ".bold().cyan(),
+                        "restart".into(),
                     ]),
                 }
             }

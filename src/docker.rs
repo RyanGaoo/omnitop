@@ -29,6 +29,51 @@ pub enum DockerState {
     Containers(Vec<Container>),
 }
 
+/// A lifecycle action that can be triggered against a container.
+#[derive(Clone, Copy)]
+pub enum ContainerAction {
+    Stop,
+    Restart,
+}
+
+impl ContainerAction {
+    fn verb(self) -> &'static str {
+        match self {
+            ContainerAction::Stop => "stop",
+            ContainerAction::Restart => "restart",
+        }
+    }
+
+    /// Present-tense label for the in-progress status message.
+    pub fn gerund(self) -> &'static str {
+        match self {
+            ContainerAction::Stop => "Stopping",
+            ContainerAction::Restart => "Restarting",
+        }
+    }
+
+    /// Past-tense label for the completion status message.
+    pub fn past(self) -> &'static str {
+        match self {
+            ContainerAction::Stop => "stopped",
+            ContainerAction::Restart => "restarted",
+        }
+    }
+}
+
+/// Stop or restart a container by id. Blocking (a stop can take ~10s while Docker
+/// waits out the SIGTERM grace period), so callers must run this off the UI thread.
+pub fn run_action(action: ContainerAction, id: &str) -> Result<(), String> {
+    let socket = find_socket().ok_or("no Docker/Podman socket found")?;
+    let path = format!("/containers/{id}/{}", action.verb());
+    match post(&socket, &path)? {
+        // 204 = success; 304 = container already in the requested state.
+        200..=299 | 304 => Ok(()),
+        404 => Err("container not found".into()),
+        status => Err(format!("HTTP {status}")),
+    }
+}
+
 /// Spawn a background thread that polls the container runtime on an interval and
 /// sends updates over a channel. Keeps the UI responsive since the Docker stats
 /// endpoint can block for ~1s per container.
@@ -161,6 +206,40 @@ fn request(socket: &Path, path: &str) -> Result<Vec<u8>, String> {
         return Err(format!("HTTP {status}: {}", msg.trim()));
     }
     Ok(body)
+}
+
+/// Perform a minimal HTTP/1.1 POST (no body) over the Unix socket and return the
+/// response status code. Used for container lifecycle actions, which return 204/304.
+fn post(socket: &Path, path: &str) -> Result<u16, String> {
+    let mut stream = UnixStream::connect(socket).map_err(|e| format!("connect: {e}"))?;
+    // A stop waits out the SIGTERM grace period (~10s), so allow generous read time.
+    stream
+        .set_read_timeout(Some(Duration::from_secs(30)))
+        .ok();
+    stream
+        .set_write_timeout(Some(Duration::from_secs(6)))
+        .ok();
+
+    let req = format!(
+        "POST {path} HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+    );
+    stream
+        .write_all(req.as_bytes())
+        .map_err(|e| format!("write: {e}"))?;
+
+    let mut raw = Vec::new();
+    stream
+        .read_to_end(&mut raw)
+        .map_err(|e| format!("read: {e}"))?;
+
+    let sep = find(&raw, b"\r\n\r\n").ok_or("malformed response: no header terminator")?;
+    let header = String::from_utf8_lossy(&raw[..sep]);
+    header
+        .lines()
+        .next()
+        .and_then(|line| line.split_whitespace().nth(1))
+        .and_then(|code| code.parse::<u16>().ok())
+        .ok_or_else(|| "malformed status line".to_string())
 }
 
 /// Decode an HTTP chunked-transfer-encoded body.
@@ -381,5 +460,16 @@ mod tests {
             !containers.is_empty(),
             "expected at least one running container"
         );
+    }
+
+    /// Exercises the real POST action path. Restart is reversible (the container comes
+    /// back up), so it's safe to run against a demo container. Ignored by default.
+    /// Run with: `cargo test -- --ignored --nocapture live_restart`
+    #[test]
+    #[ignore = "requires a running Docker daemon with a container named omnitop-redis"]
+    fn live_restart_action() {
+        // Docker's lifecycle endpoints accept a name in place of an id.
+        run_action(ContainerAction::Restart, "omnitop-redis").expect("restart action failed");
+        println!("restart action succeeded");
     }
 }

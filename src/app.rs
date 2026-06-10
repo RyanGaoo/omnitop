@@ -17,13 +17,14 @@ pub enum SortKey {
     Memory,
     Pid,
     Name,
+    Net,
 }
 
 impl SortKey {
     /// The natural default direction when first selecting a column: usage metrics
     /// start descending (biggest first), identifiers start ascending.
     fn default_desc(self) -> bool {
-        matches!(self, SortKey::Cpu | SortKey::Memory)
+        matches!(self, SortKey::Cpu | SortKey::Memory | SortKey::Net)
     }
 }
 
@@ -262,6 +263,12 @@ impl App {
             .and_then(|&idx| self.processes.get(idx))
     }
 
+    pub fn selected_container(&self) -> Option<&Container> {
+        self.container_state
+            .selected()
+            .and_then(|i| self.containers.get(i))
+    }
+
     pub fn kill_selected(&mut self) {
         let signal = self.pending_signal;
         let target = self.selected_proc().map(|p| (p.pid, p.name.clone()));
@@ -345,6 +352,12 @@ impl App {
             SortKey::Name => self
                 .processes
                 .sort_by(|a, b| dir(a.name.to_lowercase().cmp(&b.name.to_lowercase()))),
+            SortKey::Net => {
+                let net = &self.net_rates;
+                let total = |pid: u32| net.get(&pid).map_or(0, |r| r.rx_bps + r.tx_bps);
+                self.processes
+                    .sort_by(|a, b| dir(total(a.pid).cmp(&total(b.pid))));
+            }
         }
     }
 
