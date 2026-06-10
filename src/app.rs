@@ -151,11 +151,7 @@ impl App {
         push_history(&mut self.mem_history, mem_pct);
 
         self.gpus = gpu::sample();
-        let gpu_util = self
-            .gpus
-            .first()
-            .and_then(|g| g.utilization)
-            .unwrap_or(0.0);
+        let gpu_util = self.gpus.first().and_then(|g| g.utilization).unwrap_or(0.0);
         push_history(&mut self.gpu_history, gpu_util as u64);
 
         self.processes = self
@@ -347,7 +343,9 @@ impl App {
             SortKey::Cpu => self
                 .processes
                 .sort_by(|a, b| dir(a.cpu.partial_cmp(&b.cpu).unwrap_or(Equal))),
-            SortKey::Memory => self.processes.sort_by(|a, b| dir(a.mem_bytes.cmp(&b.mem_bytes))),
+            SortKey::Memory => self
+                .processes
+                .sort_by(|a, b| dir(a.mem_bytes.cmp(&b.mem_bytes))),
             SortKey::Pid => self.processes.sort_by(|a, b| dir(a.pid.cmp(&b.pid))),
             SortKey::Name => self
                 .processes

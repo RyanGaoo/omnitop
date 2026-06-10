@@ -39,7 +39,9 @@ mod live_tests {
                     peak = total;
                 }
                 for (&pid, &rate) in &rates {
-                    if top.map_or(true, |(_, t)| rate.rx_bps + rate.tx_bps > t.rx_bps + t.tx_bps) {
+                    if top.map_or(true, |(_, t)| {
+                        rate.rx_bps + rate.tx_bps > t.rx_bps + t.tx_bps
+                    }) {
                         top = Some((pid, rate));
                     }
                 }

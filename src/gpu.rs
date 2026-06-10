@@ -131,8 +131,11 @@ mod macos {
 
         // IOServiceGetMatchingServices consumes a reference on `matching`; do not release it.
         let mut iter: IoObject = 0;
-        if IOServiceGetMatchingServices(KIO_MAIN_PORT_DEFAULT, matching as CFDictionaryRef, &mut iter)
-            != KERN_SUCCESS
+        if IOServiceGetMatchingServices(
+            KIO_MAIN_PORT_DEFAULT,
+            matching as CFDictionaryRef,
+            &mut iter,
+        ) != KERN_SUCCESS
         {
             return out;
         }

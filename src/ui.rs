@@ -307,7 +307,11 @@ fn draw_process_table(frame: &mut Frame, app: &mut App, area: Rect) {
     )
     .header(header)
     .block(block)
-    .row_highlight_style(Style::default().bg(Color::DarkGray).add_modifier(Modifier::BOLD));
+    .row_highlight_style(
+        Style::default()
+            .bg(Color::DarkGray)
+            .add_modifier(Modifier::BOLD),
+    );
 
     frame.render_stateful_widget(table, area, &mut app.table_state);
 }
@@ -369,7 +373,11 @@ fn draw_container_view(frame: &mut Frame, app: &mut App, area: Rect) {
             .borders(Borders::ALL)
             .title(format!(" Containers ({}) ", app.containers.len())),
     )
-    .row_highlight_style(Style::default().bg(Color::DarkGray).add_modifier(Modifier::BOLD));
+    .row_highlight_style(
+        Style::default()
+            .bg(Color::DarkGray)
+            .add_modifier(Modifier::BOLD),
+    );
 
     frame.render_stateful_widget(table, area, &mut app.container_state);
 }
