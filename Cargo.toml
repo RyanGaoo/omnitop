@@ -25,6 +25,11 @@ libc = "0.2"
 [target.'cfg(target_os = "macos")'.dependencies]
 core-foundation-sys = "0.8"
 
+# NVIDIA GPU stats on Linux/Windows. nvml-wrapper loads libnvidia-ml at runtime, so it
+# links cleanly even on machines without an NVIDIA driver (it just no-ops there).
+[target.'cfg(not(target_os = "macos"))'.dependencies]
+nvml-wrapper = "0.10"
+
 [profile.release]
 lto = true
 strip = true

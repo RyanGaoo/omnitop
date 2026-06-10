@@ -24,7 +24,45 @@ pub fn sample() -> Vec<GpuStats> {
     }
     #[cfg(not(target_os = "macos"))]
     {
-        Vec::new()
+        nvidia::sample()
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+mod nvidia {
+    use nvml_wrapper::Nvml;
+
+    use super::GpuStats;
+
+    pub fn sample() -> Vec<GpuStats> {
+        // NVML is loaded at runtime; on a machine without an NVIDIA driver `init` fails
+        // and we return nothing, so the GPU panel simply doesn't appear.
+        let Ok(nvml) = Nvml::init() else {
+            return Vec::new();
+        };
+        let Ok(count) = nvml.device_count() else {
+            return Vec::new();
+        };
+
+        let mut out = Vec::new();
+        for index in 0..count {
+            let Ok(device) = nvml.device_by_index(index) else {
+                continue;
+            };
+            let name = device.name().unwrap_or_else(|_| "NVIDIA GPU".to_string());
+            let utilization = device.utilization_rates().ok().map(|u| u.gpu as f32);
+            let (mem_used, mem_total) = match device.memory_info() {
+                Ok(mem) => (Some(mem.used), Some(mem.total)),
+                Err(_) => (None, None),
+            };
+            out.push(GpuStats {
+                name,
+                utilization,
+                mem_used,
+                mem_total,
+            });
+        }
+        out
     }
 }
 

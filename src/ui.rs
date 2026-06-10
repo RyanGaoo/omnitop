@@ -142,9 +142,14 @@ fn draw_gpu_panel(frame: &mut Frame, app: &App, area: Rect) {
     let Some(gpu) = app.gpus.first() else {
         return;
     };
-    let title = match gpu.name.strip_prefix("AGXAccelerator") {
-        Some(model) if !model.is_empty() => format!(" GPU: Apple {model} "),
-        _ => " GPU ".to_string(),
+    let chip = match gpu.name.strip_prefix("AGXAccelerator") {
+        Some(model) if !model.is_empty() => format!("Apple {model}"),
+        _ => gpu.name.clone(),
+    };
+    let title = if chip.is_empty() {
+        " GPU ".to_string()
+    } else {
+        format!(" GPU: {} ", truncate(&chip, 16))
     };
     let block = Block::default().borders(Borders::ALL).title(title);
     let inner = block.inner(area);

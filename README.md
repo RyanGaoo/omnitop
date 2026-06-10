@@ -27,7 +27,7 @@ Other tools each cover one slice; omnitop unifies them in a single TUI.
 | Everything in one TUI      |     ✅      |  —   |  —   |  —   |   —   |    —    |
 | Runs without root          |     ✅      |  ✅  |  ✅  |  ✅  |  ✅   |   ❌    |
 
-¹ omnitop's GPU and per-process network are macOS today; Linux is on the roadmap.
+¹ omnitop GPU: Apple Silicon (macOS) and NVIDIA (Linux/Windows, via NVML). Per-process network is macOS today; Linux is on the roadmap.
 ² btop/nvtop GPU is Linux (NVIDIA/AMD/Intel); nethogs network is Linux and requires root.
 
 ## Install / Run
@@ -38,18 +38,19 @@ cargo run --release
 
 ## Keybindings
 
-| Key                | Action                                                     |
-| ------------------ | ---------------------------------------------------------- |
-| `q` / `Esc`        | Quit                                                       |
-| `Tab`              | Switch between Processes and Containers views              |
-| `1` / `2`          | Jump to Processes / Containers view                        |
-| `↑`/`↓` or `j`/`k` | Navigate the current list                                  |
-| `/`                | Filter by name or PID (Enter to apply, Esc to clear)       |
-| `x`                | Kill selected process with SIGTERM (confirmation)          |
-| `X`                | Force-kill with SIGKILL (confirmation)                     |
-| `t`                | Toggle process tree view                                   |
-| `space`            | Pause/resume refresh                                       |
-| `c`/`m`/`p`/`n`    | Sort by CPU / memory / PID / name (press again to reverse) |
+| Key                 | Action                                                               |
+| ------------------- | -------------------------------------------------------------------- |
+| `q` / `Esc`         | Quit                                                                 |
+| `Tab`               | Switch between Processes and Containers views                        |
+| `1` / `2`           | Jump to Processes / Containers view                                  |
+| `↑`/`↓` or `j`/`k`  | Navigate the current list                                            |
+| `/`                 | Filter by name or PID (Enter to apply, Esc to clear)                 |
+| `x`                 | Kill selected process with SIGTERM (confirmation)                    |
+| `X`                 | Force-kill with SIGKILL (confirmation)                               |
+| `t`                 | Toggle process tree view                                             |
+| `space`             | Pause/resume refresh                                                 |
+| `c`/`m`/`p`/`n`/`N` | Sort by CPU / memory / PID / name / network (press again to reverse) |
+| `s` / `r`           | Stop / restart selected container (Containers view)                  |
 
 ## Roadmap
 
@@ -69,16 +70,17 @@ cargo run --release
   - Docker/Podman socket integration (minimal HTTP-over-Unix-socket client, no async deps)
   - Background poller thread keeps the UI responsive
   - Per-container CPU% and memory vs. limit, tabbed view
+  - Stop / restart containers from the UI (`s` / `r`), run off the UI thread ✅
   - _Follow-up (v0.3.x):_ map host processes to containers (Linux cgroups; not possible on macOS where Docker runs in a VM)
-  - _Follow-up:_ stop/restart containers from the UI
 - **v0.4 — GPU** ✅
   - Apple Silicon via IOKit/IORegistry (hand-written FFI, no `sudo`)
+  - NVIDIA via NVML on Linux/Windows (loaded at runtime; no-ops without a driver) ✅
   - GPU utilization gauge + memory + history sparkline in the header
-  - _Follow-up:_ NVIDIA via NVML; per-process GPU attribution
+  - _Follow-up:_ per-process GPU attribution
 - **v0.5 — Network** ✅
   - Per-process network throughput on macOS via `nettop` (no `sudo`), background poller diffing cumulative counters into live rates
-  - `RX/s`/`TX/s` columns + aggregate network total in the process view
-  - _Follow-up:_ Linux per-process network (eBPF / nethogs-style capture); sort by throughput
+  - `RX/s`/`TX/s` columns + aggregate network total + sort by throughput (`N`) ✅
+  - _Follow-up:_ Linux per-process network (eBPF / nethogs-style capture)
 - **v1.0 — Release**
   - Homebrew tap, prebuilt binaries, AUR package
   - Benchmarks: omnitop's own overhead vs. htop/btop
@@ -104,7 +106,7 @@ src/
   ui.rs      — ratatui rendering (tabs, header gauges, process/container tables, footer)
   config.rs  — TOML config loading (refresh rate, accent color)
   docker.rs  — minimal Docker/Podman client over a Unix socket + background poller
-  gpu.rs     — GPU sampling (macOS: hand-written IOKit/CoreFoundation FFI)
+  gpu.rs     — GPU sampling (macOS: hand-written IOKit FFI; Linux/Windows: NVML)
   net.rs     — per-process network rates (macOS: nettop poller + cumulative-counter diffing)
 ```
 
