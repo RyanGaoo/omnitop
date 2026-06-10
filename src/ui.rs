@@ -201,10 +201,11 @@ fn per_core_line(per_core: &[f32]) -> Paragraph<'static> {
 
 fn draw_process_table(frame: &mut Frame, app: &mut App, area: Rect) {
     let accent = app.accent;
+    let arrow = if app.sort_desc { "▼" } else { "▲" };
     let sort_label = |key: SortKey, label: &str| -> Span {
         if app.sort_key == key {
             Span::styled(
-                format!("{label} ▼"),
+                format!("{label} {arrow}"),
                 Style::default().add_modifier(Modifier::BOLD).fg(accent),
             )
         } else {

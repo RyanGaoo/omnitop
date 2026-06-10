@@ -19,6 +19,14 @@ pub enum SortKey {
     Name,
 }
 
+impl SortKey {
+    /// The natural default direction when first selecting a column: usage metrics
+    /// start descending (biggest first), identifiers start ascending.
+    fn default_desc(self) -> bool {
+        matches!(self, SortKey::Cpu | SortKey::Memory)
+    }
+}
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum InputMode {
     Normal,
@@ -61,6 +69,7 @@ pub struct App {
     pub visible: Vec<usize>,
     pub table_state: TableState,
     pub sort_key: SortKey,
+    pub sort_desc: bool,
     pub input_mode: InputMode,
     pub filter: String,
     pub cpu_usage: f32,
@@ -92,6 +101,7 @@ impl App {
             visible: Vec::new(),
             table_state: TableState::default().with_selected(0),
             sort_key: SortKey::Cpu,
+            sort_desc: true,
             input_mode: InputMode::Normal,
             filter: String::new(),
             cpu_usage: 0.0,
@@ -165,7 +175,13 @@ impl App {
     }
 
     pub fn sort_by(&mut self, key: SortKey) {
-        self.sort_key = key;
+        if self.sort_key == key {
+            // Pressing the active sort key again flips the direction.
+            self.sort_desc = !self.sort_desc;
+        } else {
+            self.sort_key = key;
+            self.sort_desc = key.default_desc();
+        }
         self.sort();
         self.apply_filter();
     }
@@ -316,15 +332,19 @@ impl App {
     }
 
     fn sort(&mut self) {
+        use std::cmp::Ordering::Equal;
+        let desc = self.sort_desc;
+        // Each arm computes the ascending ordering; flip it when descending.
+        let dir = |ord: std::cmp::Ordering| if desc { ord.reverse() } else { ord };
         match self.sort_key {
             SortKey::Cpu => self
                 .processes
-                .sort_by(|a, b| b.cpu.partial_cmp(&a.cpu).unwrap_or(std::cmp::Ordering::Equal)),
-            SortKey::Memory => self.processes.sort_by(|a, b| b.mem_bytes.cmp(&a.mem_bytes)),
-            SortKey::Pid => self.processes.sort_by(|a, b| a.pid.cmp(&b.pid)),
+                .sort_by(|a, b| dir(a.cpu.partial_cmp(&b.cpu).unwrap_or(Equal))),
+            SortKey::Memory => self.processes.sort_by(|a, b| dir(a.mem_bytes.cmp(&b.mem_bytes))),
+            SortKey::Pid => self.processes.sort_by(|a, b| dir(a.pid.cmp(&b.pid))),
             SortKey::Name => self
                 .processes
-                .sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase())),
+                .sort_by(|a, b| dir(a.name.to_lowercase().cmp(&b.name.to_lowercase()))),
         }
     }
 
