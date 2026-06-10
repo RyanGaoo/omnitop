@@ -143,11 +143,9 @@ impl App {
         self.mem_total = self.sys.total_memory();
 
         push_history(&mut self.cpu_history, self.cpu_usage as u64);
-        let mem_pct = if self.mem_total > 0 {
-            (self.mem_used * 100 / self.mem_total) as u64
-        } else {
-            0
-        };
+        let mem_pct = (self.mem_used * 100)
+            .checked_div(self.mem_total)
+            .unwrap_or(0);
         push_history(&mut self.mem_history, mem_pct);
 
         self.gpus = gpu::sample();

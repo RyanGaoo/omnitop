@@ -2,6 +2,8 @@
 
 A unified system monitor for the modern stack: **processes, containers, GPU, and per-process network — one pane of glass, one TUI.**
 
+[![CI](https://github.com/RyanGaoo/omnitop/actions/workflows/ci.yml/badge.svg)](https://github.com/RyanGaoo/omnitop/actions/workflows/ci.yml)
+
 ![omnitop demo](https://raw.githubusercontent.com/RyanGaoo/omnitop/main/docs/demo.gif)
 
 Existing monitors each show a slice: `htop`/`btop` show processes, `docker stats` shows containers, `nvidia-smi`/`asitop` show GPU, `nethogs` shows network. omnitop's goal is all of it, in one fast, beautiful terminal UI.

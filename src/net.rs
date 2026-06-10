@@ -39,9 +39,7 @@ mod live_tests {
                     peak = total;
                 }
                 for (&pid, &rate) in &rates {
-                    if top.map_or(true, |(_, t)| {
-                        rate.rx_bps + rate.tx_bps > t.rx_bps + t.tx_bps
-                    }) {
+                    if top.is_none_or(|(_, t)| rate.rx_bps + rate.tx_bps > t.rx_bps + t.tx_bps) {
                         top = Some((pid, rate));
                     }
                 }
@@ -99,8 +97,11 @@ mod macos {
 
     use super::{NetRate, NetRates};
 
+    /// Cumulative (bytes_in, bytes_out) byte counters per pid, as last read from `nettop`.
+    type Counters = HashMap<u32, (u64, u64)>;
+
     pub fn run(tx: &Sender<NetRates>, interval: Duration) {
-        let mut prev: Option<(Instant, HashMap<u32, (u64, u64)>)> = None;
+        let mut prev: Option<(Instant, Counters)> = None;
         loop {
             if let Some(current) = sample() {
                 let now = Instant::now();
@@ -134,7 +135,7 @@ mod macos {
     }
 
     /// Run `nettop` once and return cumulative (bytes_in, bytes_out) per pid.
-    fn sample() -> Option<HashMap<u32, (u64, u64)>> {
+    fn sample() -> Option<Counters> {
         let output = Command::new("nettop")
             .args(["-P", "-x", "-l", "1", "-J", "bytes_in,bytes_out"])
             .output()
@@ -143,7 +144,7 @@ mod macos {
             return None;
         }
         let text = String::from_utf8_lossy(&output.stdout);
-        let mut map: HashMap<u32, (u64, u64)> = HashMap::new();
+        let mut map: Counters = HashMap::new();
         for line in text.lines() {
             if let Some((pid, cin, cout)) = parse_line(line) {
                 let entry = map.entry(pid).or_insert((0, 0));
